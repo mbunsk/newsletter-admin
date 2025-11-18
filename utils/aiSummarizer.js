@@ -936,20 +936,20 @@ function getRequiredSectionsForWeekday(weekday) {
     return ['idea_futures', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'];
   } else if (day === 'tuesday') {
     // TUESDAY — Market Map Tuesday
-    // Required: Top 3 New Clusters, Customer Pain Analysis, Opportunities in the Gaps, Early Market Signals, Dealflow that Matches Clusters, One Thing To Do Today
-    return ['clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'];
+    // Required: Idea Futures Index, Top 3 New Clusters, Customer Pain Analysis, Opportunities in the Gaps, Early Market Signals, Dealflow that Matches Clusters, One Thing To Do Today
+    return ['idea_futures', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'];
   } else if (day === 'wednesday') {
     // WEDNESDAY — Pattern Watch Wednesday
     // Required: Idea Futures Index, Deep Clustering Report, Validation Reality Check, Deal Radar, Wednesday Experiment, Founder Field Note, Tomorrow's Question, One Thing To Do Today
     return ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'];
   } else if (day === 'thursday') {
     // THURSDAY — Reality Check Thursday
-    // Required: Why Ideas Fail, Execution Gaps, Monthly Progress Snapshot, Anti-Hype Section, Category Deep Dive, One Thing To Do Today, Tomorrow's Question
-    return ['why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'];
+    // Required: Idea Futures Index, Why Ideas Fail, Execution Gaps, Monthly Progress Snapshot, Anti-Hype Section, Category Deep Dive, One Thing To Do Today, Tomorrow's Question
+    return ['idea_futures', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'];
   } else if (day === 'friday') {
     // FRIDAY — Cohort Report Friday
-    // Required: Top 10 Ideas of the Week, Cluster-of-the-Week, Founder-of-the-Week, Micro Funding Roundup, High-Confidence Opportunities, The Weekend Challenge, Preview of Monday
-    return ['weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'];
+    // Required: Idea Futures Index, Top 10 Ideas of the Week, Cluster-of-the-Week, Founder-of-the-Week, Micro Funding Roundup, High-Confidence Opportunities, The Weekend Challenge, Preview of Monday
+    return ['idea_futures', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'];
   }
   
   // Default: return all common sections

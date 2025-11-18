@@ -611,10 +611,10 @@ function getSectionOrderForWeekday(weekday = '') {
   const day = weekday.toLowerCase();
   const orders = {
     monday: ['idea_futures', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'],
-    tuesday: ['clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
+    tuesday: ['idea_futures', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
     wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'],
-    thursday: ['why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
-    friday: ['weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
+    thursday: ['idea_futures', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
+    friday: ['idea_futures', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
     default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'one_thing_today']
   };
   return orders[day] || orders.default;
