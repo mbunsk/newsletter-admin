@@ -10,7 +10,8 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --omit=optional
+# Use npm install for better compatibility (npm ci can fail if package-lock.json is out of sync)
+RUN npm install --production
 
 # Copy application code
 COPY . .
