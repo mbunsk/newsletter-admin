@@ -17,11 +17,12 @@ const PORT = process.env.PORT || process.env.ADMIN_PORT || 4000;
 const ADMIN_USERNAME = 'nladmin';
 const ADMIN_PASSWORD = 'nlpw123';
 
-// Detect if running in Docker container
-// If running inside Docker, use direct npm commands
-// If running on host, use docker-compose exec
+// Detect if running in Docker container or Render environment
+// On Render, we're already in a container, so use direct npm commands
+// Only use docker-compose if running locally on host machine
 const isDocker = existsSync('/.dockerenv');
-const useDockerCompose = !isDocker; // Use docker-compose if NOT in Docker
+const isRender = !!process.env.RENDER; // Render sets RENDER environment variable
+const useDockerCompose = !isDocker && !isRender; // Only use docker-compose if NOT in Docker and NOT on Render
 
 const pipelineSteps = [
   { 
@@ -68,23 +69,44 @@ function runStep(step) {
   return new Promise((resolve, reject) => {
     jobState.currentStep = step.label;
     appendLog(`▶ ${step.label}`);
+    
+    // Determine command and working directory
+    let command, args, cwd;
+    
+    if (useDockerCompose) {
+      // Local development: use docker-compose
+      command = 'docker-compose';
+      args = ['exec', '-T', 'app', 'npm', 'run', step.id];
+      cwd = ROOT_DIR;
+      appendLog(`Running via docker-compose: ${command} ${args.join(' ')}`);
+    } else {
+      // Render or Docker: run npm directly
+      command = 'npm';
+      args = ['run', step.id];
+      cwd = process.cwd(); // Use current working directory
+      appendLog(`Running directly: ${command} ${args.join(' ')} in ${cwd}`);
+    }
 
-    // If using docker-compose, execute via docker-compose exec
-    // Otherwise, run npm directly inside container
-    const child = useDockerCompose
-      ? spawn('docker-compose', ['exec', '-T', 'app', 'npm', 'run', step.id], {
-          cwd: ROOT_DIR,
-          shell: false,
-          env: process.env
-        })
-      : spawn('npm', ['run', step.id], {
-          cwd: '/app',
-          shell: false,
-          env: process.env
-        });
+    const child = spawn(command, args, {
+      cwd: cwd,
+      shell: false,
+      env: { ...process.env, NODE_ENV: process.env.NODE_ENV || 'production' }
+    });
 
     child.stdout.on('data', data => appendLog(data.toString().trim()));
     child.stderr.on('data', data => appendLog(data.toString().trim()));
+
+    // Handle spawn errors (e.g., command not found)
+    child.on('error', (error) => {
+      appendLog(`✖ ${step.label} spawn error: ${error.message}`);
+      if (error.code === 'ENOENT') {
+        appendLog(`Command not found: ${command}. Check if it's installed and in PATH.`);
+        if (useDockerCompose) {
+          appendLog('Hint: docker-compose is not available. Running in Render/Docker?');
+        }
+      }
+      reject(new Error(`${step.label} spawn failed: ${error.message}`));
+    });
 
     child.on('close', code => {
       if (code === 0) {
