@@ -53,27 +53,63 @@
       const stepsList = document.getElementById('steps-list');
 
       async function fetchSteps() {
-        const res = await fetch('/api/steps');
-        const steps = await res.json();
-        stepsList.innerHTML = steps.map(step => `<li>${step.label}</li>`).join('');
+        try {
+          const res = await fetch('/api/steps');
+          
+          if (res.status === 401) {
+            window.location.href = '/login';
+            return;
+          }
+          
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          
+          const steps = await res.json();
+          stepsList.innerHTML = steps.map(step => `<li>${step.label}</li>`).join('');
+        } catch (error) {
+          console.error('Error fetching steps:', error);
+          if (error.message.includes('401')) {
+            window.location.href = '/login';
+          }
+        }
       }
 
       async function fetchStatus() {
-        const res = await fetch('/api/status');
-        const data = await res.json();
+        try {
+          const res = await fetch('/api/status');
+          
+          if (res.status === 401) {
+            // Not authenticated, redirect to login
+            window.location.href = '/login';
+            return;
+          }
+          
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          
+          const data = await res.json();
 
-        statusText.textContent = data.running ? 'Running' : data.error ? 'Error' : 'Idle';
-        currentStep.textContent = data.currentStep || '—';
-        lastRun.textContent = data.lastRunSummary
-          ? `${data.lastRunSummary.finishedAt} (${data.lastRunSummary.success ? 'Success' : 'Failed'})`
-          : '—';
-        runBtn.disabled = data.running;
+          statusText.textContent = data.running ? 'Running' : data.error ? 'Error' : 'Idle';
+          currentStep.textContent = data.currentStep || '—';
+          lastRun.textContent = data.lastRunSummary
+            ? `${data.lastRunSummary.finishedAt} (${data.lastRunSummary.success ? 'Success' : 'Failed'})`
+            : '—';
+          runBtn.disabled = data.running;
 
-        logsEl.innerHTML = (data.logs || [])
-          .slice()
-          .reverse()
-          .map(line => `<div>${line}</div>`)
-          .join('');
+          logsEl.innerHTML = (data.logs || [])
+            .slice()
+            .reverse()
+            .map(line => `<div>${line}</div>`)
+            .join('');
+        } catch (error) {
+          console.error('Error fetching status:', error);
+          // If it's a 401, redirect to login
+          if (error.message.includes('401')) {
+            window.location.href = '/login';
+          }
+        }
       }
 
       function updateCurrentTime() {

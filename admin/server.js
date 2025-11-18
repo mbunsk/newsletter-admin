@@ -10,7 +10,8 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 
 const app = express();
-const PORT = process.env.ADMIN_PORT || process.env.PORT || 4000;
+// Render provides PORT environment variable, use it or default to 4000
+const PORT = process.env.PORT || process.env.ADMIN_PORT || 4000;
 
 // Authentication credentials
 const ADMIN_USERNAME = 'nladmin';
@@ -182,11 +183,18 @@ app.post('/logout', (req, res) => {
 });
 
 // API routes first (before static files) - protected
-app.get('/api/status', requireAuth, (_req, res) => {
+// Note: API endpoints return 401 JSON instead of redirect for better API usage
+app.get('/api/status', (req, res) => {
+  if (!req.session || !req.session.authenticated) {
+    return res.status(401).json({ error: 'Unauthorized', redirect: '/login' });
+  }
   res.json(jobState);
 });
 
-app.post('/api/run', requireAuth, async (_req, res) => {
+app.post('/api/run', (req, res) => {
+  if (!req.session || !req.session.authenticated) {
+    return res.status(401).json({ error: 'Unauthorized', redirect: '/login' });
+  }
   if (jobState.running) {
     return res.status(409).json({ message: 'Pipeline already running.' });
   }
@@ -194,7 +202,11 @@ app.post('/api/run', requireAuth, async (_req, res) => {
   res.json({ message: 'Pipeline started.' });
 });
 
-app.get('/api/newsletters', requireAuth, async (_req, res) => {
+app.get('/api/newsletters', async (req, res) => {
+  if (!req.session || !req.session.authenticated) {
+    return res.status(401).json({ error: 'Unauthorized', redirect: '/login' });
+  }
+  
   try {
     const outputDir = path.join(ROOT_DIR, 'output');
     const files = await fs.readdir(outputDir);
@@ -218,7 +230,10 @@ app.get('/api/newsletters', requireAuth, async (_req, res) => {
   }
 });
 
-app.get('/api/steps', requireAuth, (_req, res) => {
+app.get('/api/steps', (req, res) => {
+  if (!req.session || !req.session.authenticated) {
+    return res.status(401).json({ error: 'Unauthorized', redirect: '/login' });
+  }
   res.json(pipelineSteps);
 });
 
@@ -429,7 +444,10 @@ app.get('*', requireAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Admin dashboard available at http://localhost:${PORT}`);
+// Listen on all interfaces (0.0.0.0) for Render deployment
+// Render requires binding to 0.0.0.0, not localhost
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Admin dashboard available on port ${PORT}`);
+  console.log(`Health check: http://0.0.0.0:${PORT}/health`);
 });
 
