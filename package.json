@@ -1,0 +1,45 @@
+{
+  "name": "startup-idea-terminal",
+  "version": "1.0.0",
+  "description": "Automated newsletter generator combining internal idea analytics with external startup signals",
+  "main": "scheduler/dailyJob.js",
+  "type": "module",
+  "scripts": {
+    "start": "node scheduler/dailyJob.js",
+    "collect:internal": "node collectors/internal.js",
+    "collect:external": "node collectors/external.js",
+    "merge": "node processors/mergeData.js",
+    "insights": "node processors/generateInsights.js",
+    "build": "node newsletter/builder.js",
+    "admin": "node admin/server.js",
+    "migrate": "node database/migrate.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "newsletter",
+    "startup",
+    "data-aggregator",
+    "automation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.3.1",
+    "google-trends-api": "^4.9.2",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "openai": "^4.20.0",
+    "pg": "^8.11.3",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
+
+

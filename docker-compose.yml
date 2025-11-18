@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: startup-ideas-db
+    environment:
+      POSTGRES_DB: startup_ideas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: startup-ideas-app
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres}@postgres:5432/startup_ideas
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - CRUNCHBASE_API_KEY=${CRUNCHBASE_API_KEY:-}
+      - PRODUCT_HUNT_API_KEY=${PRODUCT_HUNT_API_KEY:-}
+      - PRODUCT_HUNT_API_SECRET=${PRODUCT_HUNT_API_SECRET:-}
+      - PRODUCT_HUNT_DEV_TOKEN=${PRODUCT_HUNT_DEV_TOKEN:-}
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+      - BEEHIIV_API_KEY=${BEEHIIV_API_KEY:-}
+      - BEEHIIV_PUBLICATION_ID=${BEEHIIV_PUBLICATION_ID:-}
+    volumes:
+      - ./data:/app/data
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./processors:/app/processors
+      - ./collectors:/app/collectors
+      - ./newsletter:/app/newsletter
+      - ./utils:/app/utils
+      - ./scheduler:/app/scheduler
+      - ./admin:/app/admin
+      - ./config.js:/app/config.js
+      - ./package.json:/app/package.json
+      - ./.env:/app/.env
+    ports:
+      - "${ADMIN_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Default: container stays running for manual commands
+    # Uncomment to run the daily job automatically on startup:
+    # command: npm start
+
+volumes:
+  postgres_data:
+    driver: local
+

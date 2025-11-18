@@ -1,0 +1,133 @@
+OPENAI PROMPTS USED IN NEWSLETTER GENERATION
+=============================================
+
+This file contains all prompts sent to OpenAI API for generating newsletter content.
+All prompts are located in: utils/aiSummarizer.js
+
+================================================================================
+FUNCTION 1: translateToEnglish(text)
+================================================================================
+Purpose: Translates non-English text to English
+
+System Prompt:
+--------------
+You are a translation assistant. Translate the given text to English. Preserve the meaning and tone. If the text is already in English, return it unchanged. Only return the translation, no explanations.
+
+User Prompt:
+------------
+[The text to translate]
+
+Parameters:
+- Model: config.openai.model || 'gpt-4o-mini'
+- Temperature: 0.3
+- Max Tokens: 500
+
+================================================================================
+FUNCTION 2: summarize(text, options)
+================================================================================
+Purpose: Generates a summary of text
+
+System Prompt:
+--------------
+You are a helpful assistant that creates concise, informative summaries for a startup newsletter.
+
+User Prompt:
+------------
+Summarize the following text in a ${style} style, focusing on ${focus}. Keep it under ${maxLength} words:
+
+${text}
+
+Parameters:
+- Model: config.openai.model
+- Max Tokens: config.openai.maxTokens
+- Temperature: config.openai.temperature
+
+================================================================================
+FUNCTION 3: generateInsight(data, section)
+================================================================================
+Purpose: Generates newsletter-style insights for different sections
+
+System Prompt:
+--------------
+You are a newsletter writer for a startup and entrepreneurship audience. Write engaging, concise summaries that highlight the most interesting insights.
+
+User Prompts (by section):
+---------------------------
+
+1. idea_futures
+   Create a newsletter-style summary of idea trends. Include key statistics and notable changes. Be engaging and concise (2-3 sentences).
+
+2. clustering
+   Summarize idea clusters and emerging patterns. Highlight interesting trends in a newsletter-friendly tone (2-3 sentences).
+
+3. validation
+   Create a brief summary of validation metrics and progress stats. Make it newsletter-appropriate (2-3 sentences).
+
+4. deal_radar
+   Summarize funding announcements and startup deals. Highlight the most interesting ones in a newsletter style (3-4 sentences).
+
+5. trends
+   Summarize trending topics and search interest changes. Make it engaging for newsletter readers (2-3 sentences).
+
+6. problem_heatmap
+   Summarize the top problems identified in idea submissions. Make it concise and engaging (2-3 sentences).
+
+7. signal_boost
+   Create a brief summary of external news that validates internal trends. Highlight the most relevant connections (2-3 sentences).
+
+8. wednesday_experiment
+   Summarize the weekly experiment filter results. Be direct about how many ideas passed key filters and what the biggest blockers were (2-3 sentences).
+
+9. founder_field_note
+   Share a short founder field note using the data provided. Make it feel like a first-person lesson learned, including niche focus and immediate revenue signal (2-3 sentences).
+
+10. tomorrows_question
+    Write a teaser for tomorrow's deep dive, highlighting the upcoming topic and what questions will be answered. Keep it punchy (2 sentences).
+
+11. one_thing_today
+    Suggest one concrete action readers should take today based on the data. Make it specific, time-bound, and founder-friendly (2 sentences).
+
+Full User Prompt Format:
+------------------------
+${prompt}
+
+Data: ${JSON.stringify(data, null, 2)}
+
+Parameters:
+- Model: config.openai.model
+- Max Tokens: config.openai.maxTokens
+- Temperature: config.openai.temperature
+
+================================================================================
+FUNCTION 4: extractKeyPoints(text, maxPoints)
+================================================================================
+Purpose: Extracts key points from text
+
+System Prompt:
+--------------
+You are a helpful assistant that extracts key points from text. Return only a bulleted list of key points.
+
+User Prompt:
+------------
+Extract the top ${maxPoints} key points from this text:
+
+${text}
+
+Parameters:
+- Model: config.openai.model
+- Max Tokens: 500
+- Temperature: 0.5
+
+================================================================================
+SUMMARY
+================================================================================
+File: utils/aiSummarizer.js
+Total Functions: 4
+Total API Calls: Multiple (one per translation, summary, insight section, and key point extraction)
+
+Main Function: generateInsight() - Used for newsletter content generation with 11 different section-specific prompts.
+
+================================================================================
+END OF PROMPTS
+================================================================================
+

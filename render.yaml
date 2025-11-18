@@ -1,0 +1,78 @@
+services:
+  # Admin Dashboard Web Service
+  - type: web
+    name: newsletter-admin
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: newsletter-db
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CRUNCHBASE_API_KEY
+        sync: false
+      - key: PRODUCT_HUNT_API_KEY
+        sync: false
+      - key: PRODUCT_HUNT_API_SECRET
+        sync: false
+      - key: PRODUCT_HUNT_DEV_TOKEN
+        sync: false
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+      - key: BEEHIIV_API_KEY
+        sync: false
+      - key: BEEHIIV_PUBLICATION_ID
+        sync: false
+      - key: ADMIN_PORT
+        value: 4000
+      - key: SESSION_SECRET
+        generateValue: true
+    healthCheckPath: /health
+    dockerCommand: npm run admin
+
+  # Background Worker for Daily Newsletter Generation
+  - type: worker
+    name: newsletter-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: newsletter-db
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CRUNCHBASE_API_KEY
+        sync: false
+      - key: PRODUCT_HUNT_API_KEY
+        sync: false
+      - key: PRODUCT_HUNT_API_SECRET
+        sync: false
+      - key: PRODUCT_HUNT_DEV_TOKEN
+        sync: false
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
+      - key: BEEHIIV_API_KEY
+        sync: false
+      - key: BEEHIIV_PUBLICATION_ID
+        sync: false
+    dockerCommand: npm start
+    # Schedule: Run daily at 6 AM UTC
+    schedule: "0 6 * * *"
+
+databases:
+  - name: newsletter-db
+    plan: starter
+    databaseName: startup_ideas
+    user: newsletter_user
+

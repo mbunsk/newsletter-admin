@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Newsletter History</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Generated Newsletters</h1>
+      <p>Browse previously generated HTML issues.</p>
+
+      <div class="card">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align: left; padding: 8px;">File</th>
+              <th style="text-align: left; padding: 8px;">Modified</th>
+              <th style="text-align: left; padding: 8px;">Size (KB)</th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+
+      <a href="/" style="color: #2563eb;">← Back to dashboard</a>
+    </div>
+
+    <script>
+      async function loadHistory() {
+        const res = await fetch('/api/newsletters');
+        const data = await res.json();
+        const body = document.getElementById('history-body');
+
+        if (!data.length) {
+          body.innerHTML = '<tr><td colspan="3" style="padding:8px;">No newsletters found.</td></tr>';
+          return;
+        }
+
+        body.innerHTML = data
+          .map(
+            item => `
+          <tr>
+            <td style="padding:8px;"><a href="${item.url}" target="_blank">${item.file}</a></td>
+            <td style="padding:8px;">${item.modified}</td>
+            <td style="padding:8px;">${item.sizeKb}</td>
+          </tr>`
+          )
+          .join('');
+      }
+
+      loadHistory();
+    </script>
+  </body>
+</html>
+

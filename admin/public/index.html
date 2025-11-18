@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Newsletter Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Newsletter Control Panel</h1>
+      <p>Trigger the full pipeline and monitor its progress in real time.</p>
+
+      <div class="card">
+        <div class="status-row">
+          <button id="run-btn">Run Newsletter Pipeline</button>
+          <div>
+            <strong>Status:</strong> <span id="status-text">Idle</span><br />
+            <strong>Current Step:</strong> <span id="current-step">—</span><br />
+            <strong>Last Run:</strong> <span id="last-run">—</span><br />
+            <strong>Date & Time:</strong> <span id="current-time">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Pipeline Steps</h2>
+        <ol id="steps-list"></ol>
+      </div>
+
+      <div class="card">
+        <h2>Logs</h2>
+        <div id="logs" class="logs"></div>
+      </div>
+
+      <div class="card">
+        <h2>Quick Links</h2>
+        <ul class="link-list">
+          <li><a href="/history">View Generated Newsletters</a></li>
+          <li><a href="/output" target="_blank">Open Output Folder</a></li>
+          <li><a href="#" id="logout-link" style="color: #dc2626;">Logout</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      const statusText = document.getElementById('status-text');
+      const currentStep = document.getElementById('current-step');
+      const lastRun = document.getElementById('last-run');
+      const currentTime = document.getElementById('current-time');
+      const logsEl = document.getElementById('logs');
+      const runBtn = document.getElementById('run-btn');
+      const stepsList = document.getElementById('steps-list');
+
+      async function fetchSteps() {
+        const res = await fetch('/api/steps');
+        const steps = await res.json();
+        stepsList.innerHTML = steps.map(step => `<li>${step.label}</li>`).join('');
+      }
+
+      async function fetchStatus() {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        statusText.textContent = data.running ? 'Running' : data.error ? 'Error' : 'Idle';
+        currentStep.textContent = data.currentStep || '—';
+        lastRun.textContent = data.lastRunSummary
+          ? `${data.lastRunSummary.finishedAt} (${data.lastRunSummary.success ? 'Success' : 'Failed'})`
+          : '—';
+        runBtn.disabled = data.running;
+
+        logsEl.innerHTML = (data.logs || [])
+          .slice()
+          .reverse()
+          .map(line => `<div>${line}</div>`)
+          .join('');
+      }
+
+      function updateCurrentTime() {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        const timeStr = now.toLocaleTimeString('en-US', { 
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        currentTime.textContent = `${dateStr} ${timeStr}`;
+      }
+
+      async function triggerRun() {
+        runBtn.disabled = true;
+        await fetch('/api/run', { method: 'POST' });
+        fetchStatus();
+      }
+
+      runBtn.addEventListener('click', triggerRun);
+      
+      // Logout handler
+      document.getElementById('logout-link').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          const response = await fetch('/logout', { method: 'POST' });
+          const data = await response.json();
+          if (data.success) {
+            window.location.href = data.redirect || '/login';
+          }
+        } catch (error) {
+          console.error('Logout error:', error);
+          window.location.href = '/login';
+        }
+      });
+      
+      fetchSteps();
+      fetchStatus();
+      updateCurrentTime();
+      setInterval(fetchStatus, 4000);
+      setInterval(updateCurrentTime, 1000);
+    </script>
+  </body>
+</html>
+

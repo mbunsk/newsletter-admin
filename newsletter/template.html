@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{newsletter_title}} - {{extended_date}}</title>
+    <style>
+        :root {
+            color-scheme: light;
+        }
+        body {
+            font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.7;
+            color: #1f2937;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 30px 15px;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+            overflow: hidden;
+        }
+        .masthead {
+            background: linear-gradient(135deg, #111827, #1f2937);
+            color: #f9fafb;
+            padding: 40px 40px 32px;
+            position: relative;
+        }
+        .masthead::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.45), transparent 55%);
+            pointer-events: none;
+        }
+        .masthead-content {
+            position: relative;
+            z-index: 1;
+        }
+        .masthead-title {
+            font-size: 30px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin: 0 0 8px;
+            color: #facc15;
+        }
+        .masthead-date {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.82);
+            text-transform: uppercase;
+            letter-spacing: 0.24em;
+            margin-bottom: 16px;
+        }
+        .masthead-tagline {
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.88);
+        }
+        main {
+            padding: 40px 40px 10px;
+        }
+        .section {
+            margin-bottom: 48px;
+        }
+        .section h2 {
+            font-size: 22px;
+            letter-spacing: 0.04em;
+            margin: 0 0 20px;
+            text-transform: uppercase;
+            color: #111827;
+        }
+        .section h2 span {
+            color: #2563eb;
+        }
+        .section p {
+            margin: 0 0 16px;
+            color: #334155;
+            font-size: 16px;
+        }
+        .section strong {
+            color: #111827;
+        }
+        .mover-list {
+            margin: 16px 0 20px;
+            padding: 0;
+            list-style: none;
+        }
+        .mover-row {
+            display: grid;
+            grid-template-columns: 160px 1fr 72px 32px;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background-color: #f8fafc;
+            margin-bottom: 10px;
+        }
+        .mover-label {
+            font-weight: 600;
+            color: #1f2937;
+            text-transform: capitalize;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .mover-name {
+            font-size: 15px;
+        }
+        .mover-sub {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        .mover-bar {
+            height: 8px;
+            background-color: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .mover-bar-fill {
+            height: 100%;
+            transition: width 0.4s ease;
+        }
+        .mover-bar-fill.positive {
+            background: linear-gradient(90deg, #16a34a, #22c55e);
+        }
+        .mover-bar-fill.negative {
+            background: linear-gradient(90deg, #dc2626, #f97316);
+        }
+        .mover-value {
+            font-weight: 600;
+            color: #1f2937;
+            justify-self: end;
+        }
+        .mover-icon {
+            font-size: 18px;
+            text-align: center;
+        }
+        .mover-text-list {
+            margin: 16px 0 20px;
+            font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+        .mover-text-row {
+            display: flex;
+            margin-bottom: 4px;
+            white-space: pre;
+        }
+        .mover-category {
+            display: inline-block;
+            font-weight: 600;
+            color: #1f2937;
+            text-transform: capitalize;
+            min-width: 180px;
+        }
+        .mover-bar-text {
+            display: inline-block;
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: #334155;
+            margin: 0 8px;
+        }
+        .mover-percent {
+            display: inline-block;
+            font-weight: 600;
+            color: #1f2937;
+            margin-left: 4px;
+        }
+        .mover-icon-text {
+            display: inline-block;
+            font-size: 16px;
+            margin-left: 6px;
+        }
+        .metric-note {
+            font-size: 15px;
+            color: #475569;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+        .cluster-card,
+        .deal-card,
+        .note-card,
+        .callout-card {
+            background-color: #f8fafc;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            border: 1px solid #e2e8f0;
+        }
+        .cluster-card h3 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            color: #1d4ed8;
+        }
+        .cluster-details {
+            font-size: 15px;
+            color: #475569;
+        }
+        .deal-card h3 {
+            margin: 0 0 6px;
+            font-size: 17px;
+            color: #111827;
+        }
+        .deal-card span {
+            color: #2563eb;
+            font-weight: 600;
+        }
+        .deal-card p {
+            margin: 8px 0 0;
+            color: #475569;
+            font-size: 15px;
+        }
+        .validation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin: 20px 0 24px;
+        }
+        .validation-tile {
+            padding: 16px;
+            border-radius: 12px;
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            text-align: center;
+        }
+        .validation-tile .label {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #1d4ed8;
+            margin-bottom: 6px;
+        }
+        .validation-tile .value {
+            font-size: 26px;
+            font-weight: 700;
+            color: #111827;
+        }
+        blockquote {
+            margin: 0;
+            padding: 18px 24px;
+            background-color: #f1f5f9;
+            border-left: 4px solid #2563eb;
+            border-radius: 12px;
+            font-style: italic;
+            color: #1f2937;
+        }
+        .cta-card {
+            padding: 22px;
+            border-radius: 14px;
+            background-color: #eef2ff;
+            border: 1px solid #c7d2fe;
+        }
+        .cta-card strong {
+            color: #312e81;
+        }
+        .sponsor-card {
+            padding: 22px;
+            border-radius: 14px;
+            background-color: #fef3c7;
+            border: 1px solid #facc15;
+            color: #92400e;
+        }
+        footer {
+            padding: 0 40px 40px;
+            color: #6b7280;
+            font-size: 13px;
+        }
+        footer p {
+            margin: 6px 0;
+        }
+        @media (max-width: 640px) {
+            body {
+                padding: 20px 0;
+            }
+            .container {
+                border-radius: 0;
+            }
+            .masthead {
+                padding: 32px 24px;
+            }
+            main,
+            footer {
+                padding-left: 24px;
+                padding-right: 24px;
+            }
+            .mover-row {
+                grid-template-columns: 140px 1fr 64px 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="masthead">
+            <div class="masthead-content">
+                <div class="masthead-title">{{newsletter_title}}</div>
+                <div class="masthead-date">{{extended_date}}</div>
+                <div class="masthead-tagline">"{{tagline}}"</div>
+            </div>
+        </header>
+        <main>
+            {{idea_futures_section}}
+            {{weekend_spikes_section}}
+            {{weekly_watchlist_section}}
+            {{clustering_section}}
+            {{opportunities_in_gaps_section}}
+            {{early_market_signals_section}}
+            {{trends_section}}
+            {{validation_section}}
+            {{deal_radar_section}}
+            {{experiment_section}}
+            {{founder_field_note_section}}
+            {{tomorrows_question_section}}
+            {{why_ideas_fail_section}}
+            {{execution_gaps_section}}
+            {{monthly_progress_section}}
+            {{anti_hype_section}}
+            {{category_teardown_section}}
+            {{weekly_top_10_section}}
+            {{cluster_of_week_section}}
+            {{founder_of_week_section}}
+            {{high_confidence_section}}
+            {{weekend_challenge_section}}
+            {{monday_preview_section}}
+            {{one_thing_section}}
+            {{closing_section}}
+            {{sponsor_section}}
+        </main>
+        <footer>
+            <p>{{footer_note}}</p>
+            <p>Powered by ValidatorAI · Data from internal submissions and public signals</p>
+        </footer>
+    </div>
+</body>
+</html>
+
