@@ -829,8 +829,8 @@ async function fetchRedditPosts() {
  * Main collection function
  * @returns {Promise<Object>} Collected external data
  */
-export async function collectExternalData() {
-  const today = getDateString();
+export async function collectExternalData(date = null) {
+  const today = date || getDateString();
   console.log(`Starting external data collection for date: ${today} (today: ${new Date().toISOString()})...`);
   
   try {
@@ -927,7 +927,9 @@ async function saveData(data) {
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  collectExternalData()
+  // Accept date from command line: node collectors/external.js 2025-11-18
+  const date = process.argv[2] || null;
+  collectExternalData(date)
     .then(data => {
       console.log('Collection complete:', JSON.stringify(data, null, 2));
       process.exit(0);

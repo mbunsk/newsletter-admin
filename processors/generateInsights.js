@@ -328,7 +328,9 @@ async function saveInsights(insights) {
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  generateInsights()
+  // Accept date from command line: node processors/generateInsights.js 2025-11-18
+  const date = process.argv[2] || null;
+  generateInsights(date)
     .then(insights => {
       console.log('Insights generated:', JSON.stringify(insights.summary_blocks, null, 2));
       process.exit(0);

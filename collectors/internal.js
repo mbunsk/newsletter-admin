@@ -289,7 +289,76 @@ function normalizeProblemName(problem) {
 }
 
 /**
- * Group similar problems together using keyword matching
+ * Check if two normalized strings are similar (fuzzy match)
+ * @param {string} str1 - First string
+ * @param {string} str2 - Second string
+ * @returns {boolean} True if strings are similar
+ */
+function areNormalizedSimilar(str1, str2) {
+  if (str1 === str2) return true;
+  
+  // Check if one contains the other (for substring matches)
+  if (str1.length > 20 && str2.length > 20) {
+    if (str1.includes(str2) || str2.includes(str1)) return true;
+  }
+  
+  // Check word overlap (at least 60% of words should match)
+  const words1 = str1.split(/\s+/).filter(w => w.length > 3);
+  const words2 = str2.split(/\s+/).filter(w => w.length > 3);
+  if (words1.length === 0 || words2.length === 0) return false;
+  
+  const commonWords = words1.filter(w => words2.includes(w));
+  const minWords = Math.min(words1.length, words2.length);
+  return commonWords.length >= Math.ceil(minWords * 0.6);
+}
+
+/**
+ * Extract meaningful keywords from a problem statement
+ * Filters out common stop words and focuses on domain-specific terms
+ * @param {string} problem - Problem string
+ * @returns {Array} Array of meaningful keywords
+ */
+function extractMeaningfulKeywords(problem) {
+  const lower = problem.toLowerCase();
+  
+  // Common stop words to filter out (too generic)
+  const stopWords = new Set([
+    'this', 'that', 'these', 'those', 'with', 'from', 'have', 'has', 'had',
+    'been', 'being', 'were', 'where', 'when', 'what', 'which', 'who',
+    'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can',
+    'more', 'most', 'much', 'many', 'some', 'any', 'all', 'each', 'every',
+    'very', 'too', 'also', 'just', 'only', 'even', 'still', 'already',
+    'time', 'times', 'way', 'ways', 'thing', 'things', 'one', 'ones',
+    'make', 'makes', 'made', 'take', 'takes', 'took', 'get', 'gets', 'got',
+    'give', 'gives', 'gave', 'come', 'comes', 'came', 'go', 'goes', 'went',
+    'see', 'sees', 'saw', 'know', 'knows', 'knew', 'think', 'thinks', 'thought',
+    'want', 'wants', 'wanted', 'need', 'needs', 'needed', 'use', 'uses', 'used',
+    'find', 'finds', 'found', 'work', 'works', 'worked', 'try', 'tries', 'tried'
+  ]);
+  
+  // Extract words (5+ chars for better specificity, or important 4-char words)
+  const allWords = lower.match(/\b\w{4,}\b/g) || [];
+  
+  // Filter out stop words and focus on meaningful terms
+  const meaningfulWords = allWords.filter(word => {
+    // Keep words that are 5+ chars (likely domain-specific)
+    if (word.length >= 5) return true;
+    
+    // Keep important 4-char words that aren't stop words
+    if (word.length === 4 && !stopWords.has(word)) {
+      // Keep domain-specific 4-char words
+      const domainWords = ['cost', 'price', 'paid', 'free', 'safe', 'fast', 'slow', 'easy', 'hard'];
+      return domainWords.includes(word);
+    }
+    
+    return false;
+  });
+  
+  return [...new Set(meaningfulWords)]; // Remove duplicates
+}
+
+/**
+ * Group similar problems together using improved keyword matching
  * @param {Array} problems - Array of problem strings
  * @returns {Array} Grouped problems with normalized names
  */
@@ -301,35 +370,14 @@ function groupSimilarProblems(problems) {
   problems.forEach((problem, index) => {
     if (!problem || problem.length < 10) return;
     
-    const lower = problem.toLowerCase();
-    const words = lower.match(/\b\w{4,}\b/g) || []; // Words 4+ chars
-    const keyPhrases = [];
+    const keywords = extractMeaningfulKeywords(problem);
     
-    // Common problem-related phrases
-    const phrases = [
-      'contract', 'legal', 'document', 'reading', 'understanding', 'terms',
-      'pricing', 'cost', 'expensive', 'affordable', 'price',
-      'management', 'organize', 'track', 'monitor', 'manage',
-      'communication', 'connect', 'reach', 'contact', 'message',
-      'time', 'efficient', 'fast', 'quick', 'slow', 'waste',
-      'quality', 'better', 'improve', 'enhance', 'poor',
-      'access', 'available', 'find', 'discover', 'difficult',
-      'payment', 'money', 'financial', 'cost', 'pay',
-      'security', 'safe', 'protect', 'secure', 'privacy',
-      'scheduling', 'appointment', 'booking', 'calendar',
-      'content', 'create', 'generate', 'writing', 'blog'
-    ];
-    
-    phrases.forEach(phrase => {
-      if (lower.includes(phrase)) {
-        keyPhrases.push(phrase);
-      }
-    });
+    // Skip if no meaningful keywords found
+    if (keywords.length === 0) return;
     
     problemData.push({ 
       index, 
-      words, 
-      keyPhrases, 
+      keywords, 
       original: problem,
       normalized: normalizeProblemName(problem)
     });
@@ -345,7 +393,7 @@ function groupSimilarProblems(problems) {
       name: data.original.substring(0, 150), // Use first problem as group name
       problems: [data.original],
       count: 1,
-      keywords: [...new Set([...data.words, ...data.keyPhrases])],
+      keywords: data.keywords,
       normalized: data.normalized
     };
     
@@ -353,18 +401,27 @@ function groupSimilarProblems(problems) {
     problemData.forEach(otherData => {
       if (used.has(otherData.index) || data.index === otherData.index) return;
       
-      // Calculate similarity (simple keyword overlap)
-      const commonWords = data.words.filter(w => otherData.words.includes(w));
-      const commonPhrases = data.keyPhrases.filter(p => otherData.keyPhrases.includes(p));
-      const totalCommon = commonWords.length + commonPhrases.length * 2;
-      const totalUnique = new Set([...data.words, ...data.keyPhrases, ...otherData.words, ...otherData.keyPhrases]).size;
-      const similarity = totalUnique > 0 ? totalCommon / totalUnique : 0;
+      // Check normalized name similarity first (most reliable)
+      const nameSimilar = areNormalizedSimilar(data.normalized, otherData.normalized);
+      if (nameSimilar) {
+        group.problems.push(otherData.original);
+        group.count++;
+        used.add(otherData.index);
+        return;
+      }
       
-      // Also check if normalized names are very similar
-      const nameSimilarity = data.normalized === otherData.normalized ? 1 : 0;
+      // Calculate keyword similarity (require at least 2 common keywords)
+      const commonKeywords = data.keywords.filter(k => otherData.keywords.includes(k));
       
-      // If similarity > 30% or names match, group them
-      if (similarity > 0.3 || nameSimilarity > 0) {
+      // Require minimum 2 meaningful keyword matches
+      if (commonKeywords.length < 2) return;
+      
+      // Calculate similarity score
+      const totalKeywords = new Set([...data.keywords, ...otherData.keywords]).size;
+      const similarity = totalKeywords > 0 ? commonKeywords.length / totalKeywords : 0;
+      
+      // Require 50% similarity (increased from 30%) AND at least 2 common keywords
+      if (similarity >= 0.5 && commonKeywords.length >= 2) {
         group.problems.push(otherData.original);
         group.count++;
         used.add(otherData.index);
@@ -418,11 +475,22 @@ function getProblemHeatmap(ideas, previousIdeas) {
     const previous = previousProblemCounts[normalized] || 0;
     const delta = calculateWoWChange(current, previous);
     
+    // Select best examples that are most similar to the group name
+    const groupNameNormalized = normalizeProblemName(group.name);
+    const examples = group.problems
+      .map(problem => ({
+        problem,
+        similarity: areNormalizedSimilar(groupNameNormalized, normalizeProblemName(problem)) ? 1 : 0
+      }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 3)
+      .map(item => item.problem);
+    
     return {
       problem: group.name.substring(0, 150), // Limit length for display
       count: current,
       delta: delta,
-      examples: group.problems.slice(0, 3) // Show 3 example problems in this group
+      examples: examples.length > 0 ? examples : group.problems.slice(0, 3) // Show 3 most similar examples
     };
   });
   
@@ -645,8 +713,8 @@ function filterIdeasByDateRange(ideas, startDate, endDate) {
  * Main collection function
  * @returns {Promise<Object>} Collected internal data
  */
-export async function collectInternalData() {
-  const today = getDateString();
+export async function collectInternalData(date = null) {
+  const today = date || getDateString();
   console.log(`Starting internal data collection for date: ${today} (today: ${new Date().toISOString()})...`);
   
   try {
@@ -716,9 +784,9 @@ export async function collectInternalData() {
     
     // Problem Heatmap (Section 2) - always use ideas data to extract actual problems
     // This extracts real problem statements from idea descriptions, not categories
-    // Use all unique ideas (not date-filtered) since we want to see all problems
-    // For WoW comparison, use ideas with dates if available
-    const ideasForProblems = uniqueIdeas.length > 0 ? uniqueIdeas : lookbackIdeas;
+    // Use current week ideas for fair WoW comparison (not all uniqueIdeas which includes all time)
+    // For WoW comparison, compare current week vs previous week
+    const ideasForProblems = currentWeekIdeas.length > 0 ? currentWeekIdeas : (uniqueIdeas.length > 0 ? uniqueIdeas : lookbackIdeas);
     const previousIdeasForProblems = previousWeekIdeas.length > 0 ? previousWeekIdeas : [];
     
     let problemHeatmap = getProblemHeatmap(ideasForProblems, previousIdeasForProblems);
@@ -804,7 +872,9 @@ async function saveData(data) {
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  collectInternalData()
+  // Accept date from command line: node collectors/internal.js 2025-11-18
+  const date = process.argv[2] || null;
+  collectInternalData(date)
     .then(data => {
       console.log('Collection complete:', JSON.stringify(data, null, 2));
       process.exit(0);

@@ -200,7 +200,9 @@ async function saveMergedData(data) {
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  loadAndMerge()
+  // Accept date from command line: node processors/mergeData.js 2025-11-18
+  const date = process.argv[2] || null;
+  loadAndMerge(date)
     .then(data => {
       console.log('Merge complete:', JSON.stringify(data, null, 2));
       process.exit(0);

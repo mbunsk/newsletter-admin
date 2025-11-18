@@ -1,0 +1,312 @@
+🧩 SYSTEM OVERVIEW
+
+We’re building a two-engine daily data aggregator that generates a newsletter (“Startup Idea Terminal”) combining internal user data with external startup signals.
+Everything runs automatically once per day, producing a single JSON summary used to assemble and send the daily email.
+
+⚙️ MODULES
+1. Internal Data Engine
+
+Input: Existing idea logs & database entries (past year + latest submissions).
+
+Process:
+
+Count and categorize ideas by topic (ai, fintech, pet tech, etc.)
+
+Compute week-over-week % changes
+
+Detect clusters (e.g., “reptile vet telehealth”) using keyword or embedding grouping
+
+Calculate simple progress/validation stats (MVP, paying, MRR, etc.)
+
+Output:
+
+{
+  "categories": [{"name": "fintech", "count": 1203, "delta": 0.27}],
+  "clusters": [{"name": "pet healthcare", "count": 2847, "wow": 3.4}],
+  "validation": {"mvp": 0.08, "paying": 0.021}
+}
+
+2. External Data Engine
+
+Input Sources:
+
+crunchbase api – funding announcements (paid plan).
+
+product hunt api – daily launches.
+
+hacker news api – “Show HN” and startup posts.
+
+techcrunch rss / venturebeat rss – funding and trend stories.
+
+google trends api – search-interest data for top categories.
+
+reddit api – posts from r/startups, r/entrepreneur, r/SaaS.
+
+Process:
+
+Fetch latest data daily.
+
+Extract relevant fields (category, description, date, url).
+
+Parse and summarize each using GPT or simple heuristics.
+
+For sources without public endpoints (like venturebeat), run small crawlers that respect robots.txt and pull only titles/descriptions.
+
+Output:
+
+{
+  "funding": [{"company": "FactoryOS", "amount": "12M", "category": "vertical saas"}],
+  "launches": [{"name": "ReptileRx", "source": "product hunt"}],
+  "trends": [{"keyword": "ai agents", "interest_change": -0.19}]
+}
+
+3. Processing & Insights Layer
+
+Merge internal + external JSON outputs.
+
+Generate summaries and highlight correlations (e.g., “Vertical SaaS ↑31% and FactoryOS raised $12M”).
+
+Use AI (OpenAI API) to phrase the insights in newsletter-style text blocks.
+
+4. Newsletter Generator
+
+Fill daily template sections:
+
+Idea Futures Index
+
+Clustering Report
+
+Validation Reality Check
+
+Deal Radar
+
+Founder Field Note
+
+Replace placeholders with generated data.
+
+Output formatted HTML or markdown ready for Beehiiv import.
+
+5. Scheduler & Automation
+
+Run everything once per day via cron, Supabase function, or simple VPS task.
+
+Log success/errors, store JSON snapshots.
+
+Optional: auto-push to Beehiiv as draft via API.
+
+6. Stack & Tools
+
+Backend: Node.js or PHP (whichever environment fits existing system).
+
+Database: PostgreSQL or Supabase (for tracking daily metrics).
+
+AI: OpenAI API (for summaries and clustering).
+
+Automation: Cron job / Supabase scheduled function.
+
+🔁 DAILY WORKFLOW
+
+Internal data job runs → generates daily metrics JSON.
+
+External data job runs → fetches + summarizes new info.
+
+Processing layer merges both → creates insight text.
+
+Newsletter generator fills the day’s template.
+
+Output emailed or pushed to Beehiiv.
+
+
+
+🧩 Project: Startup Idea Terminal
+
+Automated newsletter generator that combines internal idea analytics with external startup and funding signals.
+
+
+📁 Folder & File Structure
+/startup-terminal
+│
+├── /collectors
+│   ├── internal.js           # pulls idea stats, clusters, validation data
+│   ├── external.js           # fetches startup news, funding, trends
+│
+├── /processors
+│   ├── mergeData.js          # merges internal & external data
+│   ├── generateInsights.js   # produces newsletter-ready summaries
+│
+├── /newsletter
+│   ├── template.html         # base email template
+│   ├── builder.js            # fills template with daily data
+│   ├── beehiivPush.js        # sends newsletter draft via Beehiiv API
+│
+├── /utils
+│   ├── aiSummarizer.js       # connects to OpenAI API for text generation
+│   ├── rssFetcher.js         # generic RSS + API fetch helper
+│   ├── crawler.js            # lightweight crawler for pages w/o API
+│   ├── dateUtils.js          # date helpers (week-over-week, delta calc)
+│
+├── /scheduler
+│   ├── dailyJob.js           # orchestrates daily tasks (cron)
+│
+├── config.js                 # API keys, database connection, constants
+├── package.json              # dependencies
+└── README.md                 # documentation
+
+⚙️ Development Phases
+Phase 1 – Internal Data Engine
+
+Parse all idea submissions from DB/logs (at least 1 year).
+
+Generate JSON output with:
+
+{
+  "categories": [{"name":"ai","count":214,"delta":0.27}],
+  "clusters": [{"name":"pet healthcare","count":2847,"wow":3.4}],
+  "validation": {"mvp":0.08,"paying":0.021}
+}
+
+
+Store in /data/internal/YYYY-MM-DD.json.
+
+Phase 2 – External Data Engine
+
+Sources: crunchbase, product hunt, hacker news, techcrunch, venturebeat, google trends, reddit.
+
+Use APIs or RSS where available; crawler for others.
+
+Save to /data/external/YYYY-MM-DD.json.
+
+Example schema:
+
+{
+  "funding":[{"company":"FactoryOS","amount":"12M","category":"vertical saas"}],
+  "launches":[{"name":"ReptileRx","source":"product hunt"}],
+  "trends":[{"keyword":"ai agents","interest_change":-0.19}]
+}
+
+Phase 3 – Processing & Insights
+
+Merge both JSON files (mergeData.js).
+
+Analyze patterns (e.g., align funding with category surges).
+
+Call aiSummarizer.js to generate short insight text blocks.
+
+Output:
+
+{
+  "summary_blocks": {
+    "idea_futures": "...",
+    "clustering": "...",
+    "validation": "...",
+    "deal_radar": "..."
+  }
+}
+
+Phase 4 – Newsletter Generator
+
+builder.js loads template.html.
+
+Replaces placeholders like {idea_futures}, {clusters}, {deals}.
+
+Outputs a finished HTML newsletter (/output/YYYY-MM-DD.html).
+
+beehiivPush.js sends it to Beehiiv (as draft or publish).
+
+Phase 5 – Scheduler & Automation
+
+dailyJob.js runs all modules sequentially:
+
+Collect internal data
+
+Collect external data
+
+Merge and generate insights
+
+Build newsletter
+
+Push to Beehiiv
+
+Can be triggered via cron or Supabase function.
+
+Log success/errors to /logs/daily.log.
+
+🧠 Tech Stack Recommendations
+
+Language: Node.js (easy for async API calls + cron)
+
+DB: PostgreSQL / Supabase
+
+AI: OpenAI GPT-4 or GPT-5 for summarization
+
+Scheduler: Cron job, Render, or Supabase Edge Functions
+
+Email Platform: Beehiiv API
+
+🔁 Daily Workflow Summary
+
+Internal data collector aggregates and summarizes user idea activity.
+
+External collector fetches latest startup signals from APIs and feeds.
+
+Processor merges data → AI generates insights.
+
+Newsletter builder fills in the daily template.
+
+Output is saved and automatically pushed to Beehiiv.
+
+
+
+MONDAY — Trendline Monday
+Required sections:
+Idea Futures Index
+Weekend Spikes
+This Week’s Watchlist
+One Major Cluster
+Micro-Trends (Reddit / Crunchbase / X)
+One Thing To Do Today
+
+TUESDAY — Market Map Tuesday
+Required sections:
+Top 3 New Clusters
+Customer Pain Analysis
+Opportunities in the Gaps (“Where the Opportunity Hides”)
+Early Market Signals
+Dealflow that Matches Clusters
+One Thing To Do Today
+
+WEDNESDAY — Pattern Watch Wednesday
+Required sections:
+Idea Futures Index
+Deep Clustering Report
+Validation Reality Check
+Deal Radar
+Wednesday Experiment (Founder Behavior Experiment)
+Founder Field Note
+Tomorrow’s Question
+One Thing To Do Today
+
+THURSDAY — Reality Check Thursday
+Required sections:
+Why Ideas Fail (Based on internal data)
+Execution Gaps (Across landing pages, MVP momentum, Base44 clicks)
+Monthly Progress Snapshot (Idea → MVP → Revenue)
+Anti-Hype Section (Overbuilt or dead markets)
+Category Deep Dive (e.g., AI agents, Legal AI, Parenting Tech)
+One Thing To Do Today
+Tomorrow’s Question
+
+FRIDAY — Cohort Report Friday
+Required sections:
+Top 10 Ideas of the Week
+Cluster-of-the-Week
+Founder-of-the-Week
+Micro Funding Roundup
+High-Confidence Opportunities
+The Weekend Challenge
+
+Preview of Monday
+If the model does not receive the required data for a section on a given day, it must:
+summarize what the absence of that data implies,
+or omit the section entirely without fabricating content.
+

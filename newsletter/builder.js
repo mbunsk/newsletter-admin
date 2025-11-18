@@ -120,22 +120,37 @@ function buildIdeaFuturesSection(text, categories = []) {
       const deltaPercent = Math.round(delta * 100);
       const count = cat.count || 0;
       
-      // Calculate market share (percentage of total ideas)
+      // Calculate market share (percentage of total ideas) - for reference only
       const marketShare = totalIdeas > 0 ? (count / totalIdeas) * 100 : 0;
       const marketSharePercent = Math.round(marketShare);
       
       // Create text-based bar chart (13 characters total)
-      // Bars represent market share (percentage of total), not WoW change
+      // Bars represent WoW change percentage (scaled to fit 0-100% range)
       const barLength = 13;
       let filledBlocks = 0;
       
-      if (marketSharePercent > 0) {
-        // Scale bars based on market share (percentage of total)
-        // This ensures bars represent actual share of ideas
-        filledBlocks = Math.round((marketSharePercent / 100) * barLength);
-        // Ensure at least 1 block if category has any ideas, max 12
-        filledBlocks = Math.max(1, Math.min(12, filledBlocks));
+      // Scale bars based on WoW change percentage
+      // Normalize delta to 0-100% range for visualization
+      // For positive deltas: scale 0-200% to 0-13 blocks (capping at 200% = full bar)
+      // For negative deltas: show as empty bar
+      if (deltaPercent > 0) {
+        // Scale: 0% = 0 blocks, 100% = 13 blocks, 200%+ = 13 blocks (capped)
+        // This makes the bar length proportional to the growth rate
+        const normalizedDelta = Math.min(deltaPercent, 200); // Cap at 200% for visualization
+        filledBlocks = Math.round((normalizedDelta / 200) * barLength);
+        // Ensure at least 1 block if there's any positive growth
+        filledBlocks = Math.max(1, Math.min(barLength, filledBlocks));
+      } else if (deltaPercent < 0) {
+        // For negative growth, show a small bar proportional to the decline
+        // Scale: -100% = 0 blocks, 0% = 13 blocks
+        const normalizedDelta = Math.max(deltaPercent, -100); // Cap at -100%
+        filledBlocks = Math.round(((100 + normalizedDelta) / 100) * barLength);
+        filledBlocks = Math.max(0, Math.min(barLength, filledBlocks));
+      } else {
+        // Zero change: show minimal bar
+        filledBlocks = 1;
       }
+      
       const emptyBlocks = barLength - filledBlocks;
       const bar = '█'.repeat(filledBlocks) + '░'.repeat(emptyBlocks);
       
@@ -182,9 +197,33 @@ function buildIdeaFuturesSection(text, categories = []) {
   `;
 }
 
-function buildClusteringSection(text, clusters = []) {
+function buildClusteringSection(text, clusters = [], weekday = null) {
+  // Determine title based on weekday
+  let title = 'THE CLUSTERING REPORT';
+  let icon = '🎯';
+  
+  if (weekday && weekday.toLowerCase() === 'monday') {
+    title = 'ONE MAJOR CLUSTER';
+    icon = '🔍';
+    // For Monday, show only the first cluster (ONE major cluster)
+    clusters = Array.isArray(clusters) ? clusters.slice(0, 1) : [];
+  } else if (weekday && weekday.toLowerCase() === 'tuesday') {
+    title = 'TOP 3 NEW CLUSTERS';
+    icon = '🆕';
+    // For Tuesday, show top 3 new clusters
+    clusters = Array.isArray(clusters) ? clusters.slice(0, 3) : [];
+  } else if (weekday && weekday.toLowerCase() === 'wednesday') {
+    title = 'DEEP CLUSTERING REPORT';
+    icon = '🎯';
+    // For Wednesday, show all clusters (deep report)
+    clusters = Array.isArray(clusters) ? clusters : [];
+  } else {
+    // Default: show up to 3 clusters
+    clusters = Array.isArray(clusters) ? clusters.slice(0, 3) : [];
+  }
+  
   const cards = Array.isArray(clusters)
-    ? clusters.slice(0, 3).map((cluster, index) => {
+    ? clusters.map((cluster, index) => {
         const wowPercent = Math.round((cluster.wow || 0) * 100);
         const wowLabel = `${wowPercent >= 0 ? '+' : ''}${wowPercent}% WoW`;
         const countLabel = cluster.count ? cluster.count.toLocaleString() : 0;
@@ -201,9 +240,21 @@ function buildClusteringSection(text, clusters = []) {
 
   return `
     <section class="section">
-      <h2><span>🎯</span> THE CLUSTERING REPORT</h2>
+      <h2><span>${icon}</span> ${title}</h2>
       ${summary || '<p>No cluster insights available today.</p>'}
       ${cards}
+    </section>
+  `;
+}
+
+function buildTrendsSection(text) {
+  const content = text ? formatParagraphs(text) : '<p>No micro-trends detected.</p>';
+  return `
+    <section class="section">
+      <h2><span>📊</span> MICRO-TRENDS</h2>
+      <div class="note-card">
+        ${content}
+      </div>
     </section>
   `;
 }
@@ -383,6 +434,18 @@ function buildWeeklyWatchlistSection(text) {
 }
 
 // Tuesday-specific sections
+function buildProblemHeatmapSection(text) {
+  const content = text ? formatParagraphs(text) : '<p>No customer pain analysis available.</p>';
+  return `
+    <section class="section">
+      <h2><span>🔥</span> CUSTOMER PAIN ANALYSIS</h2>
+      <div class="note-card">
+        ${content}
+      </div>
+    </section>
+  `;
+}
+
 function buildOpportunitiesInGapsSection(text) {
   const content = text ? formatParagraphs(text) : '<p>No opportunity gaps identified.</p>';
   return `
@@ -544,6 +607,19 @@ function buildMondayPreviewSection(text) {
   `;
 }
 
+function getSectionOrderForWeekday(weekday = '') {
+  const day = weekday.toLowerCase();
+  const orders = {
+    monday: ['idea_futures', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'],
+    tuesday: ['clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
+    wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'],
+    thursday: ['why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
+    friday: ['weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
+    default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'one_thing_today']
+  };
+  return orders[day] || orders.default;
+}
+
 async function translateBlock(text) {
   if (!text) {
     return '';
@@ -563,6 +639,10 @@ async function fillTemplate(template, insights, targetDate = null) {
   const edition = config.newsletter.edition || 'Daily Edition';
   const extendedDate = `${formattedDate} | ${edition}`;
 
+  // Get weekday from date
+  const dateObj = new Date(date + 'T00:00:00');
+  const weekday = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
   const summaryBlocks = insights.summary_blocks || {};
   const rawData = insights.raw_data || {};
   const internalData = rawData.internal || {};
@@ -574,7 +654,16 @@ async function fillTemplate(template, insights, targetDate = null) {
 
   // Only build sections that have content (weekday-based generation)
   const ideaSection = summaryBlocks.idea_futures ? buildIdeaFuturesSection(await translateBlock(summaryBlocks.idea_futures), categories) : '';
-  const clusteringSection = summaryBlocks.clustering ? buildClusteringSection(await translateBlock(summaryBlocks.clustering), clusters) : '';
+  
+  // Clustering section: Only show on Monday (as "ONE MAJOR CLUSTER"), Tuesday (as "TOP 3 NEW CLUSTERS"), or Wednesday (as "DEEP CLUSTERING REPORT")
+  // Monday should show clustering, but NOT as "THE CLUSTERING REPORT"
+  let clusteringSection = '';
+  if (summaryBlocks.clustering) {
+    if (weekday.toLowerCase() === 'monday' || weekday.toLowerCase() === 'tuesday' || weekday.toLowerCase() === 'wednesday') {
+      clusteringSection = buildClusteringSection(await translateBlock(summaryBlocks.clustering), clusters, weekday);
+    }
+  }
+  
   const validationSection = summaryBlocks.validation ? buildValidationSection(await translateBlock(summaryBlocks.validation), validation) : '';
   const dealRadarSection = summaryBlocks.deal_radar ? buildDealRadarSection(await translateBlock(summaryBlocks.deal_radar), funding) : '';
   const experimentSection = summaryBlocks.wednesday_experiment ? buildExperimentSection(await translateBlock(summaryBlocks.wednesday_experiment)) : '';
@@ -585,8 +674,10 @@ async function fillTemplate(template, insights, targetDate = null) {
   // Monday-specific sections
   const weekendSpikesSection = summaryBlocks.weekend_spikes ? buildWeekendSpikesSection(await translateBlock(summaryBlocks.weekend_spikes)) : '';
   const weeklyWatchlistSection = summaryBlocks.weekly_watchlist ? buildWeeklyWatchlistSection(await translateBlock(summaryBlocks.weekly_watchlist)) : '';
+  const trendsSection = summaryBlocks.trends ? buildTrendsSection(await translateBlock(summaryBlocks.trends)) : '';
   
   // Tuesday-specific sections
+  const problemHeatmapSection = summaryBlocks.problem_heatmap ? buildProblemHeatmapSection(await translateBlock(summaryBlocks.problem_heatmap)) : '';
   const opportunitiesInGapsSection = summaryBlocks.opportunities_in_gaps ? buildOpportunitiesInGapsSection(await translateBlock(summaryBlocks.opportunities_in_gaps)) : '';
   const earlyMarketSignalsSection = summaryBlocks.early_market_signals ? buildEarlyMarketSignalsSection(await translateBlock(summaryBlocks.early_market_signals)) : '';
   
@@ -605,6 +696,46 @@ async function fillTemplate(template, insights, targetDate = null) {
   const weekendChallengeSection = summaryBlocks.weekend_challenge ? buildWeekendChallengeSection(await translateBlock(summaryBlocks.weekend_challenge)) : '';
   const mondayPreviewSection = summaryBlocks.monday_preview ? buildMondayPreviewSection(await translateBlock(summaryBlocks.monday_preview)) : '';
 
+  const sectionsMap = {
+    idea_futures: ideaSection,
+    weekend_spikes: weekendSpikesSection,
+    weekly_watchlist: weeklyWatchlistSection,
+    clustering: clusteringSection,
+    problem_heatmap: problemHeatmapSection,
+    opportunities_in_gaps: opportunitiesInGapsSection,
+    early_market_signals: earlyMarketSignalsSection,
+    trends: trendsSection,
+    validation: validationSection,
+    deal_radar: dealRadarSection,
+    wednesday_experiment: experimentSection,
+    founder_field_note: founderSection,
+    tomorrows_question: tomorrowSection,
+    why_ideas_fail: whyIdeasFailSection,
+    execution_gaps: executionGapsSection,
+    monthly_progress: monthlyProgressSection,
+    anti_hype_section: antiHypeSection,
+    category_teardown: categoryTeardownSection,
+    weekly_top_10_ideas: weeklyTop10Section,
+    cluster_of_the_week: clusterOfWeekSection,
+    founder_of_the_week: founderOfWeekSection,
+    high_confidence_opportunities: highConfidenceSection,
+    weekend_challenge: weekendChallengeSection,
+    monday_preview: mondayPreviewSection,
+    one_thing_today: oneThingSection
+  };
+
+  const sectionOrder = getSectionOrderForWeekday(weekday);
+  let mainSections = sectionOrder
+    .map(key => sectionsMap[key])
+    .filter(Boolean)
+    .join('\n');
+
+  if (!mainSections) {
+    mainSections = Object.values(sectionsMap)
+      .filter(Boolean)
+      .join('\n');
+  }
+
   const closingSection = buildClosingSection(config.newsletter.closingNote);
   const sponsorSection = buildSponsorSection(config.newsletter.sponsor);
 
@@ -614,30 +745,7 @@ async function fillTemplate(template, insights, targetDate = null) {
     .replace(/\{\{newsletter_title\}\}/g, config.newsletter.title)
     .replace(/\{\{extended_date\}\}/g, extendedDate)
     .replace(/\{\{tagline\}\}/g, config.newsletter.tagline || '')
-    .replace(/\{\{idea_futures_section\}\}/g, ideaSection)
-    .replace(/\{\{clustering_section\}\}/g, clusteringSection)
-    .replace(/\{\{validation_section\}\}/g, validationSection)
-    .replace(/\{\{deal_radar_section\}\}/g, dealRadarSection)
-    .replace(/\{\{trends_section\}\}/g, summaryBlocks.trends ? formatParagraphs(await translateBlock(summaryBlocks.trends)) : '')
-    .replace(/\{\{opportunities_in_gaps_section\}\}/g, opportunitiesInGapsSection)
-    .replace(/\{\{early_market_signals_section\}\}/g, earlyMarketSignalsSection)
-    .replace(/\{\{experiment_section\}\}/g, experimentSection)
-    .replace(/\{\{founder_field_note_section\}\}/g, founderSection)
-    .replace(/\{\{tomorrows_question_section\}\}/g, tomorrowSection)
-    .replace(/\{\{one_thing_section\}\}/g, oneThingSection)
-    .replace(/\{\{weekend_spikes_section\}\}/g, weekendSpikesSection)
-    .replace(/\{\{weekly_watchlist_section\}\}/g, weeklyWatchlistSection)
-    .replace(/\{\{why_ideas_fail_section\}\}/g, whyIdeasFailSection)
-    .replace(/\{\{execution_gaps_section\}\}/g, executionGapsSection)
-    .replace(/\{\{monthly_progress_section\}\}/g, monthlyProgressSection)
-    .replace(/\{\{anti_hype_section\}\}/g, antiHypeSection)
-    .replace(/\{\{category_teardown_section\}\}/g, categoryTeardownSection)
-    .replace(/\{\{weekly_top_10_section\}\}/g, weeklyTop10Section)
-    .replace(/\{\{cluster_of_week_section\}\}/g, clusterOfWeekSection)
-    .replace(/\{\{founder_of_week_section\}\}/g, founderOfWeekSection)
-    .replace(/\{\{high_confidence_section\}\}/g, highConfidenceSection)
-    .replace(/\{\{weekend_challenge_section\}\}/g, weekendChallengeSection)
-    .replace(/\{\{monday_preview_section\}\}/g, mondayPreviewSection)
+    .replace(/\{\{main_sections\}\}/g, mainSections || '<p>No sections available for today.</p>')
     .replace(/\{\{closing_section\}\}/g, closingSection)
     .replace(/\{\{sponsor_section\}\}/g, sponsorSection)
     .replace(/\{\{footer_note\}\}/g, footerNote);
@@ -672,7 +780,9 @@ export async function buildNewsletter(date = null) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  buildNewsletter()
+  // Accept date from command line: node newsletter/builder.js 2025-11-18
+  const date = process.argv[2] || null;
+  buildNewsletter(date)
     .then(builtPath => {
       console.log(`Newsletter generated at: ${builtPath}`);
       process.exit(0);

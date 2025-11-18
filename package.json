@@ -11,6 +11,7 @@
     "merge": "node processors/mergeData.js",
     "insights": "node processors/generateInsights.js",
     "build": "node newsletter/builder.js",
+    "test:date": "node scripts/testDate.js",
     "admin": "node admin/server.js",
     "migrate": "node database/migrate.js",
     "docker:up": "docker-compose up -d",
