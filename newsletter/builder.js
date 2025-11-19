@@ -48,6 +48,15 @@ function formatPercent(value, digits = 1) {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
+function formatChangePercent(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '0%';
+  }
+  const percent = Math.round(value * 100);
+  const sign = percent > 0 ? '+' : '';
+  return `${sign}${percent}%`;
+}
+
 function formatAmount(amount) {
   if (amount === null || amount === undefined) {
     return 'Undisclosed';
@@ -247,42 +256,101 @@ function buildClusteringSection(text, clusters = [], weekday = null) {
   `;
 }
 
-function buildTrendsSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No micro-trends detected.</p>';
+function buildTrendsSection(text, trends = [], reddit = []) {
+  const summary = text ? formatParagraphs(text) : '';
+
+  const trendItems = Array.isArray(trends)
+    ? trends.slice(0, 4).map(trend => {
+        const keyword = trend.keyword || 'Unknown trend';
+        const change = formatChangePercent(trend.interest_change || 0);
+        return `<li><strong>${keyword}</strong> · ${change} search interest</li>`;
+      })
+    : [];
+
+  const redditItems = Array.isArray(reddit)
+    ? reddit.slice(0, 3).map(post => {
+        const title = post.title || post.url || 'Reddit discussion';
+        const subreddit = post.subreddit ? `r/${post.subreddit}` : 'Reddit';
+        return `<li>${subreddit}: ${title}</li>`;
+      })
+    : [];
+
+  const fallback = summary || trendItems.length || redditItems.length
+    ? ''
+    : '<p>No micro-trends detected. Need Google Trends or Reddit signals.</p>';
+
+  const listHtml = trendItems.length || redditItems.length
+    ? `<ul class="signal-list">${[...trendItems, ...redditItems].join('')}</ul>`
+    : '';
+
   return `
     <section class="section">
       <h2><span>📊</span> MICRO-TRENDS</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${listHtml}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildValidationSection(text, validation = {}) {
-  const tilesData = [
-    { label: 'MVP Ready', value: validation.mvp },
-    { label: 'Paying Customers', value: validation.paying },
-    { label: 'Launched', value: validation.launched }
-  ];
+function buildValidationSection(text, validation = {}, totalIdeas = 0, lookbackDays = 365) {
+  // Calculate date 3 months ago (approximately 90 days)
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const monthsAgo = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+  const periodLabel = `${monthsAgo[threeMonthsAgo.getMonth()]} ${threeMonthsAgo.getFullYear()}`;
 
-  const tiles = tilesData
-    .filter(tile => typeof tile.value === 'number')
-    .map(tile => `
-      <div class="validation-tile">
-        <div class="label">${tile.label}</div>
-        <div class="value">${formatPercent(tile.value)}</div>
-      </div>
-    `)
-    .join('');
+  // Calculate ideas from 3 months ago (90 days ago)
+  // If totalIdeas is over lookbackDays, estimate how many were submitted 3 months ago
+  // Formula: ideas up to 3 months ago = totalIdeas * (lookbackDays - 90) / lookbackDays
+  const threeMonthsAgoIdeas = lookbackDays > 90 && totalIdeas > 0
+    ? Math.round(totalIdeas * (lookbackDays - 90) / lookbackDays)
+    : totalIdeas;
+
+  // Calculate percentages
+  const mvpPct = (validation.mvp || 0) * 100;
+  const payingPct = (validation.paying || 0) * 100;
+  const launchedPct = (validation.launched || 0) * 100;
+  const mrrPct = (validation.mrr || 0) * 100;
+
+  // Calculate breakdown
+  const noMvpPct = 100 - mvpPct;
+  const landingButNoFunctionalityPct = Math.max(0, launchedPct - mvpPct);
+  const workingProductPct = mvpPct;
+  const payingCustomersPct = payingPct;
+  
+  // Calculate $1K+ MRR (assuming it's roughly 7% of paying customers)
+  // This is an estimate - adjust based on actual data if available
+  const highMrrPct = payingCustomersPct > 0 ? Math.max(0, (payingCustomersPct * 0.07)) : 0;
+  const highMrrCount = threeMonthsAgoIdeas > 0 ? Math.round((threeMonthsAgoIdeas * highMrrPct) / 100) : 0;
+  const highMrrPctFormatted = highMrrPct > 0 ? highMrrPct.toFixed(1).replace(/\.0$/, '') : '0';
+
+  // Format numbers
+  const formatPct = (val) => val.toFixed(1).replace(/\.0$/, '');
+  const formatCount = (val) => val.toLocaleString();
 
   const summary = text ? formatParagraphs(text) : '';
+
+  const realityCheck = threeMonthsAgoIdeas > 0 ? `
+    <div class="note-card">
+      <p><strong>This week's hard truth:</strong></p>
+      <p>Of the ${formatCount(threeMonthsAgoIdeas)} ideas submitted in ${periodLabel}:</p>
+      <ul class="validation-list" style="margin: 16px 0; padding-left: 24px; list-style: none;">
+        <li style="margin: 8px 0;">${formatPct(noMvpPct)}% still have no MVP (after 3 months)</li>
+       <li style="margin: 8px 0;">${formatPct(mvpPct)}% have progressed to MVP stage (after 3 months)</li>       
+        <li style="margin: 8px 0;">xx% have a working product</li>
+      </ul>
+    </div>
+  ` : '<p>No validation metrics available.</p>';
 
   return `
     <section class="section">
       <h2><span>🔬</span> VALIDATION REALITY CHECK</h2>
-      ${tiles ? `<div class="validation-grid">${tiles}</div>` : ''}
-      ${summary || '<p>No validation metrics available.</p>'}
+      ${realityCheck}
+      ${summary}
     </section>
   `;
 }
@@ -294,10 +362,11 @@ function buildDealRadarSection(text, funding = []) {
     const amount = formatAmount(deal.amount);
     const category = deal.category ? deal.category : 'General';
     const source = deal.source ? deal.source : '';
+    const title = deal.title ? deal.title : '';
     return `
       <div class="deal-card">
         <h3>🔹 ${deal.company} <span>${amount}</span></h3>
-        <p>${category}${source ? ` · Source: ${source}` : ''}</p>
+        <p>${title}<br>${category}${source ? ` · Source: ${source}` : ''}</p>
       </div>
     `;
   }).join('');
@@ -313,8 +382,12 @@ function buildDealRadarSection(text, funding = []) {
   `;
 }
 
-function buildExperimentSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No experiment results to share today.</p>';
+function buildExperimentSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const totalIdeas = data.totalIdeas || 0;
+  const mvpPct = formatPercent(data.validation?.mvp || 0);
+  const fallback = `<p>${totalIdeas.toLocaleString()} ideas logged in the last cycle; only ${mvpPct} progressed to MVP. Execution still lags idea volume.</p>`;
+  const content = summary || fallback;
   return `
     <section class="section">
       <h2><span>🧪</span> THE WEDNESDAY EXPERIMENT</h2>
@@ -325,27 +398,39 @@ function buildExperimentSection(text) {
   `;
 }
 
-function buildFounderFieldNoteSection(text) {
-  if (!text) {
-    return '';
+function buildFounderFieldNoteSection(text, problems = []) {
+  let content = '';
+  if (text) {
+    content = `<blockquote>${formatParagraphs(text)}</blockquote>`;
+  } else if (Array.isArray(problems) && problems.length > 0) {
+    const topProblem = problems[0];
+    content = `<blockquote><p><strong>What founders are actually saying:</strong> ${topProblem.problem || 'Top recurring problem'} (${topProblem.count || 0} mentions). Ship something that solves this in the next 72 hours.</p></blockquote>`;
+  } else {
+    content = '<p>No founder note available. Need problem_heatmap data.</p>';
   }
   return `
     <section class="section">
       <h2><span>🎓</span> FOUNDER FIELD NOTE</h2>
-      <blockquote>${formatParagraphs(text)}</blockquote>
+      ${content}
     </section>
   `;
 }
 
-function buildTomorrowQuestionSection(text) {
-  if (!text) {
-    return '';
+function buildTomorrowQuestionSection(text, trends = []) {
+  let content = '';
+  if (text) {
+    content = formatParagraphs(text);
+  } else if (Array.isArray(trends) && trends.length > 0) {
+    const trend = trends[0];
+    content = `<p>Tomorrow we dig into: <strong>${trend.keyword || 'next emerging signal'}</strong> (${formatChangePercent(trend.interest_change || 0)} search interest). Are founders missing this shift?</p>`;
+  } else {
+    content = '<p>Tomorrow’s investigative thread queued once we receive fresh trend data.</p>';
   }
   return `
     <section class="section">
       <h2><span>🔮</span> TOMORROW'S QUESTION</h2>
       <div class="note-card">
-        ${formatParagraphs(text)}
+        ${content}
       </div>
     </section>
   `;
@@ -409,199 +494,529 @@ function buildSponsorSection(sponsor) {
 }
 
 // Monday-specific sections
-function buildWeekendSpikesSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No weekend activity spikes detected.</p>';
+function buildWeekendSpikesSection(text, categories = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const spikes = Array.isArray(categories)
+    ? categories
+        .filter(cat => (cat.delta || 0) > 0.5)
+        .slice(0, 4)
+        .map(cat => `<li>${cat.name || 'Category'} · ${formatChangePercent(cat.delta || 0)} WoW · ${cat.count || 0} submissions</li>`)
+    : [];
+
+  const fallback = summary || spikes.length
+    ? ''
+    : '<p>No weekend activity spikes detected. Need categories with positive week-over-week delta.</p>';
+
   return `
     <section class="section">
       <h2><span>📈</span> WEEKEND SPIKES</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${spikes.length ? `<ul class="signal-list">${spikes.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildWeeklyWatchlistSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No watchlist items this week.</p>';
+function buildWeeklyWatchlistSection(text, categories = [], clusters = []) {
+  const summary = text ? formatParagraphs(text) : '';
+
+  const watchlistItems = [];
+  if (Array.isArray(categories)) {
+    watchlistItems.push(
+      ...categories
+        .filter(cat => (cat.count || 0) >= 10 && Math.abs(cat.delta || 0) < 0.2)
+        .slice(0, 3)
+        .map(cat => `<li>${cat.name || 'Category'} · ${cat.count || 0} ideas · steady (${formatChangePercent(cat.delta || 0)})</li>`)
+    );
+  }
+  if (!watchlistItems.length && Array.isArray(clusters)) {
+    watchlistItems.push(
+      ...clusters.slice(0, 3).map(cluster => `<li>${cluster.name || 'Cluster'} · ${cluster.count || 0} submissions · ${formatChangePercent(cluster.wow || 0)} WoW</li>`)
+    );
+  }
+
+  const fallback = summary || watchlistItems.length
+    ? ''
+    : '<p>No watchlist items this week. Need steady-growth categories or clusters.</p>';
+
   return `
     <section class="section">
       <h2><span>👀</span> THIS WEEK'S WATCHLIST</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${watchlistItems.length ? `<ul class="signal-list">${watchlistItems.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
 // Tuesday-specific sections
-function buildProblemHeatmapSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No customer pain analysis available.</p>';
+function buildProblemHeatmapSection(text, problems = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const topProblems = Array.isArray(problems) ? problems.slice(0, 5) : [];
+
+  const cards = topProblems.length
+    ? `
+      <div class="problem-grid">
+        ${topProblems
+          .map(problem => {
+            const examples = problem.examples && problem.examples.length
+              ? `<div class="problem-example">"${problem.examples[0]}"</div>`
+              : '';
+            const categoryLabel = problem.category ? `<span class="chip">${problem.category}</span>` : '';
+            return `
+              <div class="problem-card">
+                <div class="problem-header">
+                  <strong>${problem.problem || 'Unnamed problem'}</strong>
+                  ${categoryLabel}
+                </div>
+                <div class="problem-meta">
+                  <span>${problem.count || 0} mentions</span>
+                  ${problem.delta !== undefined ? `<span>${(problem.delta * 100).toFixed(0)}% WoW</span>` : ''}
+                </div>
+                ${examples}
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+    `
+    : '';
+
+  const fallback = summary || cards
+    ? ''
+    : '<p>No customer pain analysis available. Need recent problem_heatmap data from internal collector.</p>';
+
   return `
     <section class="section">
       <h2><span>🔥</span> CUSTOMER PAIN ANALYSIS</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${cards || ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildOpportunitiesInGapsSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No opportunity gaps identified.</p>';
+function buildOpportunitiesInGapsSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+
+  const underserved = categories
+    .filter(cat => (cat.count || 0) < 10 && (cat.delta || 0) > 0.1)
+    .slice(0, 4);
+
+  const cards = underserved.length
+    ? `
+      <div class="problem-grid">
+        ${underserved
+          .map(cat => `
+            <div class="problem-card">
+              <div class="problem-header">
+                <strong>${(cat.name || 'Unlabeled category').toUpperCase()}</strong>
+              </div>
+              <div class="problem-meta">
+                <span>${cat.count || 0} ideas</span>
+                <span>${formatChangePercent(cat.delta || 0)} WoW</span>
+              </div>
+              <div class="problem-example">
+                Demand is outpacing execution here—high interest but very few builds. Perfect for founders who can ship fast.
+              </div>
+            </div>
+          `)
+          .join('')}
+      </div>
+    `
+    : '';
+
+  const fallback = summary || cards
+    ? ''
+    : '<p>No opportunity gaps identified. Need categories with week-over-week deltas from internal collector.</p>';
+
   return `
     <section class="section">
       <h2><span>🔍</span> OPPORTUNITIES IN THE GAPS</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${cards || ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildEarlyMarketSignalsSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No early market signals detected.</p>';
+function buildEarlyMarketSignalsSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+  const launches = Array.isArray(data.launches) ? data.launches : [];
+  const funding = Array.isArray(data.funding) ? data.funding : [];
+  const trends = Array.isArray(data.trends) ? data.trends : [];
+  const reddit = Array.isArray(data.reddit) ? data.reddit : [];
+
+  const signals = [];
+
+  const movers = categories
+    .filter(cat => (cat.delta || 0) > 0.15)
+    .slice(0, 3)
+    .map(cat => `${cat.name || 'Unknown'} (${formatChangePercent(cat.delta || 0)})`);
+  if (movers.length) {
+    signals.push(`<li><strong>Category momentum:</strong> ${movers.join(', ')}</li>`);
+  }
+
+  const topLaunches = launches.slice(0, 3).map(launch => launch.name || launch.tagline || 'Untitled');
+  if (topLaunches.length) {
+    signals.push(`<li><strong>Product Hunt launches:</strong> ${topLaunches.join(' • ')}</li>`);
+  }
+
+  const topFunding = funding.slice(0, 3).map(deal => `${deal.company || 'Unknown'} (${deal.amount || 'N/A'})`);
+  if (topFunding.length) {
+    signals.push(`<li><strong>Funding pulse:</strong> ${topFunding.join(' • ')}</li>`);
+  }
+
+  const trendHighlights = trends.slice(0, 3).map(trend => `${trend.keyword || 'keyword'} (${formatChangePercent(trend.interest_change || 0)})`);
+  if (trendHighlights.length) {
+    signals.push(`<li><strong>Google Trends:</strong> ${trendHighlights.join(', ')}</li>`);
+  }
+
+  const redditHighlights = reddit.slice(0, 2).map(post => post.title || post.url || 'Reddit thread');
+  if (redditHighlights.length) {
+    signals.push(`<li><strong>Reddit discussions:</strong> ${redditHighlights.join(' • ')}</li>`);
+  }
+
+  const signalsList = signals.length ? `<ul class="signal-list">${signals.join('')}</ul>` : '';
+
+  const fallback = summary || signalsList
+    ? ''
+    : '<p>No early market signals detected. Need categories, launches, funding, trends, or Reddit data.</p>';
+
   return `
     <section class="section">
       <h2><span>📡</span> EARLY MARKET SIGNALS</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${signalsList || ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
 // Thursday-specific sections
-function buildWhyIdeasFailSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No failure analysis available.</p>';
+function buildWhyIdeasFailSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const validation = data.validation || {};
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+
+  const struggling = categories
+    .filter(cat => (cat.delta || 0) < -0.25)
+    .slice(0, 3)
+    .map(cat => `<li>${cat.name || 'Unnamed category'} · ${formatChangePercent(cat.delta || 0)} submissions WoW</li>`);
+
+  const stats = validation.mvp !== undefined
+    ? `<div class="metric-note">Execution funnel: ${formatPercent(validation.landing || 0)} have a landing page · ${formatPercent(validation.mvp || 0)} at MVP </div>`
+    : '';
+
+  const fallback = summary || struggling.length || stats
+    ? ''
+    : '<p>No failure analysis available. Need validation stats and category deltas.</p>';
+
   return `
     <section class="section">
       <h2><span>❌</span> WHY IDEAS FAIL</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${stats}
+        ${struggling.length ? `<ul class="signal-list">${struggling.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildExecutionGapsSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No execution gap analysis available.</p>';
+function buildExecutionGapsSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const validation = data.validation || {};
+  const base44 = data.base44 || {};
+  const signalScore = data.signalScore || {};
+
+  const metrics = `
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Landing page</div><div class="metric-value">${formatPercent(validation.landing || 0)}</div></div>
+      <div class="metric-card"><div class="metric-label">MVP ready</div><div class="metric-value">${formatPercent(validation.mvp || 0)}</div></div>
+      <div class="metric-card"><div class="metric-label">Paying users</div><div class="metric-value">${formatPercent(validation.paying || 0)}</div></div>
+      <div class="metric-card"><div class="metric-label">Base44 clicks</div><div class="metric-value">${base44.totalClicks || 0}</div></div>
+    </div>
+  `;
+
+  const keywordList = Array.isArray(base44.topKeywords)
+    ? base44.topKeywords.slice(0, 3).map(item => `<li>${item.keyword || 'Unknown'} · ${item.count || 0} clicks</li>`)
+    : [];
+
+  const ruleSummary = signalScore.rules
+    ? `<div class="metric-note">Signal rules passed: Clear problem ${formatPercent(signalScore.rules.clearProblem || 0)} · Competitor named ${formatPercent(signalScore.rules.namedCompetitor || 0)} · <50 words ${formatPercent(signalScore.rules.conciseDescription || 0)}</div>`
+    : '';
+
+  const fallback = summary || keywordList.length || ruleSummary.trim()
+    ? ''
+    : '<p>No execution gap analysis available. Need validation metrics and Base44 clicks.</p>';
+
   return `
     <section class="section">
       <h2><span>⚡</span> EXECUTION GAPS</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${metrics}
+        ${ruleSummary}
+        ${keywordList.length ? `<ul class="signal-list">${keywordList.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildMonthlyProgressSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No monthly progress data available.</p>';
+function buildMonthlyProgressSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const totalIdeas = data.totalIdeas || 0;
+  const lookbackDays = data.lookbackDays || 365;
+  const validation = data.validation || {};
+
+  // Calculate ideas from last 30 days
+  // Formula: last 30 days = totalIdeas * 30 / lookbackDays
+  const last30DaysIdeas = lookbackDays >= 30 && totalIdeas > 0
+    ? Math.round(totalIdeas * 30 / lookbackDays)
+    : totalIdeas;
+
+  const tiles = `
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Ideas logged (30d)</div><div class="metric-value">${last30DaysIdeas.toLocaleString()}</div></div>
+      <div class="metric-card"><div class="metric-label">Landing page</div><div class="metric-value">${formatPercent(validation.landing || 0)}</div></div>
+      <div class="metric-card"><div class="metric-label">MVP ready</div><div class="metric-value">${formatPercent(validation.mvp || 0)}</div></div>
+      <div class="metric-card"><div class="metric-label">Revenue reported</div><div class="metric-value">${formatPercent(validation.paying || 0)}</div></div>
+    </div>
+  `;
+
+  const fallback = summary || totalIdeas > 0
+    ? ''
+    : '<p>No monthly progress data available. Need total idea count and validation metrics.</p>';
+
   return `
     <section class="section">
       <h2><span>📊</span> MONTHLY PROGRESS SNAPSHOT</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${totalIdeas ? tiles : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildAntiHypeSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No anti-hype analysis available.</p>';
+function buildAntiHypeSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+
+  const overbuilt = categories
+    .filter(cat => (cat.count || 0) > 20 && (cat.delta || 0) < -0.2)
+    .slice(0, 4)
+    .map(cat => `<li>${cat.name || 'Unnamed category'} · ${cat.count} submissions · ${formatChangePercent(cat.delta || 0)} WoW</li>`);
+
+  const fallback = summary || overbuilt.length
+    ? ''
+    : '<p>No anti-hype analysis available. Need category deltas and counts.</p>';
+
   return `
     <section class="section">
       <h2><span>🚫</span> MARKETS TO AVOID</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${overbuilt.length ? `<ul class="signal-list">${overbuilt.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildCategoryTeardownSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No category deep dive available.</p>';
+function buildCategoryTeardownSection(text, categories = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const topCategories = Array.isArray(categories)
+    ? [...categories].sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 5)
+    : [];
+
+  const list = topCategories.length
+    ? `<ul class="signal-list">${topCategories
+        .map(cat => `<li>${cat.name || 'Unnamed category'} · ${cat.count || 0} ideas · ${formatChangePercent(cat.delta || 0)} WoW</li>`)
+        .join('')}</ul>`
+    : '';
+
+  const fallback = summary || list
+    ? ''
+    : '<p>No category deep dive available. Need category counts from internal collector.</p>';
+
   return `
     <section class="section">
       <h2><span>🔍</span> CATEGORY DEEP DIVE</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${list}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
 // Friday-specific sections
-function buildWeeklyTop10Section(text) {
-  const content = text ? formatParagraphs(text) : '<p>No top ideas available.</p>';
+function buildWeeklyTop10Section(text, ideas = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  
+  // Filter and clean ideas
+  const ideaList = Array.isArray(ideas)
+    ? ideas
+        .filter(idea => {
+          if (!idea || !idea.title) return false;
+          const title = idea.title.trim();
+          // Exclude titles that are too short, just dashes, or mostly special characters
+          if (title.length < 3) return false;
+          if (/^[-_=]+$/.test(title)) return false; // Just dashes/underscores/equals
+          if (/^[^a-zA-Z0-9\s]+$/.test(title)) return false; // Only special characters
+          return true;
+        })
+        .slice(0, 10)
+        .map((idea) => {
+          const title = idea.title.trim();
+          const category = idea.category ? ` · <span class="chip">${idea.category}</span>` : '';
+          return `<li>${title}${category}</li>`;
+        })
+    : [];
+
+  const fallback = summary || ideaList.length
+    ? ''
+    : '<p>No top ideas available. Need internal ideas sample.</p>';
+
   return `
     <section class="section">
       <h2><span>🏆</span> TOP 10 IDEAS OF THE WEEK</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${ideaList.length ? `<ol class="signal-list">${ideaList.join('')}</ol>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
 function buildClusterOfWeekSection(text, clusters = []) {
-  const content = text ? formatParagraphs(text) : '<p>No cluster of the week selected.</p>';
-  const topCluster = clusters[0];
-  const clusterInfo = topCluster ? `<div class="cluster-card"><h3>${topCluster.name}</h3><div class="cluster-details">n=${topCluster.count} submissions</div></div>` : '';
+  const summary = text ? formatParagraphs(text) : '';
+  const topCluster = Array.isArray(clusters) && clusters.length ? clusters[0] : null;
+  const clusterInfo = topCluster
+    ? `<div class="cluster-card"><h3>${topCluster.name}</h3><div class="cluster-details">n=${topCluster.count || 0} submissions · ${formatChangePercent(topCluster.wow || 0)} WoW</div></div>`
+    : '';
+  const fallback = summary || clusterInfo
+    ? ''
+    : '<p>No cluster of the week selected. Need clustering data.</p>';
   return `
     <section class="section">
       <h2><span>⭐</span> CLUSTER OF THE WEEK</h2>
       ${clusterInfo}
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildFounderOfWeekSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No founder of the week selected.</p>';
+function buildFounderOfWeekSection(text, problems = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const spotlight = Array.isArray(problems) && problems.length
+    ? `<div class="note-card"><p><strong>Problem focus:</strong> ${problems[0].problem || 'Top founder insight'} (${problems[0].count || 0} mentions)</p></div>`
+    : '';
+  const fallback = summary || spotlight
+    ? ''
+    : '<p>No founder of the week selected. Need problem_heatmap data.</p>';
   return `
     <section class="section">
       <h2><span>👤</span> FOUNDER OF THE WEEK</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${spotlight || ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildHighConfidenceSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No high-confidence opportunities identified.</p>';
+function buildHighConfidenceSection(text, data = {}) {
+  const summary = text ? formatParagraphs(text) : '';
+  const funding = Array.isArray(data.funding) ? data.funding : [];
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+
+  const hotCategories = categories
+    .filter(cat => (cat.count || 0) >= 10 && (cat.delta || 0) > 0.3)
+    .slice(0, 3)
+    .map(cat => `<li>${cat.name || 'Category'} · ${formatChangePercent(cat.delta || 0)} WoW · ${cat.count || 0} ideas</li>`);
+
+  const dealHighlights = funding.slice(0, 3).map(deal => `<li>${deal.company || 'Startup'} · ${deal.amount || 'Undisclosed'} · ${deal.category || 'category'}</li>`);
+
+  const fallback = summary || hotCategories.length || dealHighlights.length
+    ? ''
+    : '<p>No high-confidence opportunities identified. Need funding events or fast-growing categories.</p>';
+
   return `
     <section class="section">
       <h2><span>🎯</span> HIGH-CONFIDENCE OPPORTUNITIES</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${hotCategories.length ? `<ul class="signal-list">${hotCategories.join('')}</ul>` : ''}
+        ${dealHighlights.length ? `<ul class="signal-list">${dealHighlights.join('')}</ul>` : ''}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildWeekendChallengeSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>No weekend challenge this week.</p>';
+function buildWeekendChallengeSection(text, categories = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const targetCategory = Array.isArray(categories)
+    ? categories.find(cat => (cat.delta || 0) > 0.5) || categories[0]
+    : null;
+  const challenge = targetCategory
+    ? `<p>Ship a landing page in the next 48 hours for <strong>${targetCategory.name}</strong>. There are ${targetCategory.count || 0} fresh submissions this week and momentum is ${formatChangePercent(targetCategory.delta || 0)} WoW—reach out to 5 people in this niche before Monday.</p>`
+    : '';
+  const fallback = summary || challenge
+    ? ''
+    : '<p>No weekend challenge this week. Need categories with recent growth.</p>';
   return `
     <section class="section">
       <h2><span>🏁</span> THE WEEKEND CHALLENGE</h2>
       <div class="cta-card">
-        ${content}
+        ${summary || ''}
+        ${challenge}
+        ${fallback}
       </div>
     </section>
   `;
 }
 
-function buildMondayPreviewSection(text) {
-  const content = text ? formatParagraphs(text) : '<p>Preview coming soon.</p>';
+function buildMondayPreviewSection(text, trends = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  const nextTrend = Array.isArray(trends) && trends.length ? trends[0] : null;
+  const preview = nextTrend
+    ? `<p>Watch <strong>${nextTrend.keyword}</strong> (${formatChangePercent(nextTrend.interest_change || 0)})—it’s the fastest-moving search signal heading into Monday.</p>`
+    : '';
+  const fallback = summary || preview
+    ? ''
+    : '<p>Preview coming soon. Need at least one Google Trends signal.</p>';
   return `
     <section class="section">
       <h2><span>🔮</span> PREVIEW OF MONDAY</h2>
       <div class="note-card">
-        ${content}
+        ${summary || ''}
+        ${preview}
+        ${fallback}
       </div>
     </section>
   `;
@@ -620,6 +1035,272 @@ function getSectionOrderForWeekday(weekday = '') {
   return orders[day] || orders.default;
 }
 
+/**
+ * Get master order for all sections (used for -b.html output)
+ * @returns {Array<string>} Array of all section IDs in predefined order
+ */
+function getAllSectionsMasterOrder() {
+  return [
+    'idea_futures',
+    'clustering',
+    'problem_heatmap',
+    'opportunities_in_gaps',
+    'early_market_signals',
+    'trends',
+    'validation',
+    'deal_radar',
+    'wednesday_experiment',
+    'founder_field_note',
+    'tomorrows_question',
+    'why_ideas_fail',
+    'execution_gaps',
+    'monthly_progress',
+    'anti_hype_section',
+    'category_teardown',
+    'weekend_spikes',
+    'weekly_watchlist',
+    'weekly_top_10_ideas',
+    'cluster_of_the_week',
+    'founder_of_the_week',
+    'high_confidence_opportunities',
+    'weekend_challenge',
+    'monday_preview',
+    'one_thing_today'
+  ];
+}
+
+/**
+ * Section metadata: icons, titles, and data requirements
+ */
+const sectionMetadata = {
+  idea_futures: {
+    icon: '📊',
+    title: 'IDEA FUTURES INDEX',
+    requiredData: 'categories data with counts and week-over-week deltas from internal collector'
+  },
+  clustering: {
+    icon: '🔍',
+    title: 'THE CLUSTERING REPORT',
+    requiredData: 'clusters data from internal collector (categories, problems, or sample ideas)'
+  },
+  problem_heatmap: {
+    icon: '🔥',
+    title: 'CUSTOMER PAIN ANALYSIS',
+    requiredData: 'problem heatmap data from internal collector (extracted from idea submissions)'
+  },
+  opportunities_in_gaps: {
+    icon: '🔍',
+    title: 'OPPORTUNITIES IN THE GAPS',
+    requiredData: 'categories, problems, validation stats, and clusters from internal data'
+  },
+  early_market_signals: {
+    icon: '📡',
+    title: 'EARLY MARKET SIGNALS',
+    requiredData: 'categories, clusters, problems, launches, funding, trends, and Reddit data'
+  },
+  trends: {
+    icon: '📊',
+    title: 'MICRO-TRENDS',
+    requiredData: 'trends data from Google Trends API and Reddit posts'
+  },
+  validation: {
+    icon: '🔬',
+    title: 'VALIDATION REALITY CHECK',
+    requiredData: 'validation stats (MVP percentage) from internal collector'
+  },
+  deal_radar: {
+    icon: '💰',
+    title: 'DEAL RADAR: WHAT MONEY IS CHASING',
+    requiredData: 'funding data from Crunchbase API, TechCrunch RSS, or Product Hunt'
+  },
+  wednesday_experiment: {
+    icon: '🧪',
+    title: 'THE WEDNESDAY EXPERIMENT',
+    requiredData: 'validation stats and total ideas count from internal collector'
+  },
+  founder_field_note: {
+    icon: '📝',
+    title: 'FOUNDER FIELD NOTE',
+    requiredData: 'problems and categories data from internal collector'
+  },
+  tomorrows_question: {
+    icon: '🔮',
+    title: "TOMORROW'S QUESTION",
+    requiredData: 'trends data, correlations, and categories from merged data'
+  },
+  why_ideas_fail: {
+    icon: '❌',
+    title: 'WHY IDEAS FAIL',
+    requiredData: 'validation stats, clustering data, and category analysis from internal collector'
+  },
+  execution_gaps: {
+    icon: '⚡',
+    title: 'EXECUTION GAPS',
+    requiredData: 'execution metrics: landing page %, Base44 click-through %, MVP progression rates'
+  },
+  monthly_progress: {
+    icon: '📊',
+    title: 'MONTHLY PROGRESS SNAPSHOT',
+    requiredData: 'validation stats, category trends, and idea progression data from internal collector'
+  },
+  anti_hype_section: {
+    icon: '🚫',
+    title: 'MARKETS TO AVOID',
+    requiredData: 'category trends, validation stats, and Reddit discussions from merged data'
+  },
+  category_teardown: {
+    icon: '🔍',
+    title: 'CATEGORY DEEP DIVE',
+    requiredData: 'category data with trends, validation stats, and external signals'
+  },
+  weekend_spikes: {
+    icon: '📈',
+    title: 'WEEKEND SPIKES',
+    requiredData: 'internal data from past weekend (Saturday-Sunday) with category changes or problem spikes'
+  },
+  weekly_watchlist: {
+    icon: '👀',
+    title: "THIS WEEK'S WATCHLIST",
+    requiredData: 'current week data trends from internal collector'
+  },
+  weekly_top_10_ideas: {
+    icon: '🏆',
+    title: 'TOP 10 IDEAS OF THE WEEK',
+    requiredData: 'signal scores, validation progress, and category trends from internal collector'
+  },
+  cluster_of_the_week: {
+    icon: '⭐',
+    title: 'CLUSTER OF THE WEEK',
+    requiredData: 'clusters data from internal collector with significant patterns'
+  },
+  founder_of_the_week: {
+    icon: '👤',
+    title: 'FOUNDER OF THE WEEK',
+    requiredData: 'execution progress, validation metrics, and problem-solving approach from internal data'
+  },
+  high_confidence_opportunities: {
+    icon: '🎯',
+    title: 'HIGH-CONFIDENCE OPPORTUNITIES',
+    requiredData: 'internal + external data correlations (categories, funding, launches, trends)'
+  },
+  weekend_challenge: {
+    icon: '🏁',
+    title: 'THE WEEKEND CHALLENGE',
+    requiredData: 'categories and validation data from internal collector'
+  },
+  monday_preview: {
+    icon: '🔮',
+    title: 'PREVIEW OF MONDAY',
+    requiredData: 'trends and category data to preview next week insights'
+  },
+  one_thing_today: {
+    icon: '🎯',
+    title: 'ONE THING TO DO TODAY',
+    requiredData: 'categories and validation data from internal collector'
+  }
+};
+
+/**
+ * Check if section has underlying data structure (even if AI didn't generate content)
+ * @param {string} sectionId - Section ID
+ * @param {Object} summaryBlocks - Summary blocks from insights
+ * @param {Object} rawData - Raw data from insights
+ * @param {Object} internalData - Internal data
+ * @returns {boolean} True if data structure exists
+ */
+function checkSectionHasDataStructure(sectionId, summaryBlocks, rawData, internalData) {
+  // Check if we have the required data for each section type
+  switch (sectionId) {
+    case 'idea_futures':
+      return !!(rawData.categories && rawData.categories.length > 0) || 
+             !!(internalData.categories && internalData.categories.length > 0);
+    case 'clustering':
+      return !!(internalData.clusters && internalData.clusters.length > 0) ||
+             !!(internalData.categories && internalData.categories.length > 0) ||
+             !!(internalData.problemHeatmap && internalData.problemHeatmap.length > 0);
+    case 'problem_heatmap':
+      return !!(internalData.problemHeatmap && internalData.problemHeatmap.length > 0);
+    case 'opportunities_in_gaps':
+      return !!(internalData.categories && internalData.categories.length > 0) ||
+             !!(internalData.problemHeatmap && internalData.problemHeatmap.length > 0);
+    case 'early_market_signals':
+      return !!(internalData.categories && internalData.categories.length > 0) ||
+             !!(rawData.launches && rawData.launches.length > 0) ||
+             !!(rawData.funding && rawData.funding.length > 0);
+    case 'trends':
+      return !!(rawData.trends && rawData.trends.length > 0);
+    case 'validation':
+      return !!(internalData.validation && typeof internalData.validation.mvp === 'number');
+    case 'deal_radar':
+      return !!(rawData.funding && rawData.funding.length > 0) ||
+             !!(rawData.launches && rawData.launches.length > 0);
+    case 'wednesday_experiment':
+      return !!(internalData.validation && typeof internalData.validation.mvp === 'number');
+    case 'founder_field_note':
+      return !!(internalData.problemHeatmap && internalData.problemHeatmap.length > 0) ||
+             !!(internalData.categories && internalData.categories.length > 0);
+    case 'tomorrows_question':
+      return !!(rawData.trends && rawData.trends.length > 0) ||
+             !!(internalData.categories && internalData.categories.length > 0);
+    case 'why_ideas_fail':
+      return !!(internalData.validation) || !!(internalData.clusters && internalData.clusters.length > 0);
+    case 'execution_gaps':
+      return !!(internalData.validation);
+    case 'monthly_progress':
+      return !!(internalData.validation) || !!(internalData.categories && internalData.categories.length > 0);
+    case 'anti_hype_section':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    case 'category_teardown':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    case 'weekend_spikes':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    case 'weekly_watchlist':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    case 'weekly_top_10_ideas':
+      return !!(internalData.signalScore) || !!(internalData.categories && internalData.categories.length > 0);
+    case 'cluster_of_the_week':
+      return !!(internalData.clusters && internalData.clusters.length > 0);
+    case 'founder_of_the_week':
+      return !!(internalData.validation) || !!(internalData.problemHeatmap && internalData.problemHeatmap.length > 0);
+    case 'high_confidence_opportunities':
+      return !!(internalData.categories && internalData.categories.length > 0) ||
+             !!(rawData.funding && rawData.funding.length > 0) ||
+             !!(rawData.launches && rawData.launches.length > 0);
+    case 'weekend_challenge':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    case 'monday_preview':
+      return !!(rawData.trends && rawData.trends.length > 0) ||
+             !!(internalData.categories && internalData.categories.length > 0);
+    case 'one_thing_today':
+      return !!(internalData.categories && internalData.categories.length > 0);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Build "not enough data" section placeholder
+ * @param {string} sectionId - Section ID (e.g., 'idea_futures')
+ * @returns {string} HTML for the section with "not enough data" message
+ */
+function buildNotEnoughDataSection(sectionId) {
+  const metadata = sectionMetadata[sectionId];
+  if (!metadata) {
+    return '';
+  }
+  
+  const content = `<p><strong>Not enough data available for this section.</strong></p><p>Required: ${metadata.requiredData}</p>`;
+  
+  return `
+    <section class="section">
+      <h2><span>${metadata.icon}</span> ${metadata.title}</h2>
+      <div class="note-card">
+        ${content}
+      </div>
+    </section>
+  `;
+}
+
 async function translateBlock(text) {
   if (!text) {
     return '';
@@ -631,7 +1312,7 @@ async function translateBlock(text) {
   }
 }
 
-async function fillTemplate(template, insights, targetDate = null) {
+async function fillTemplate(template, insights, targetDate = null, includeAllSections = false) {
   // Use targetDate if provided, otherwise use insights.date, otherwise use today
   const date = targetDate || insights.date || getDateString();
   console.log(`fillTemplate using date: ${date} (targetDate: ${targetDate}, insights.date: ${insights.date})`);
@@ -650,51 +1331,172 @@ async function fillTemplate(template, insights, targetDate = null) {
   const categories = rawData.categories || internalData.categories || [];
   const clusters = internalData.clusters || rawData.clusters || [];
   const validation = internalData.validation || rawData.validation || {};
+  const signalScore = internalData.signalScore || rawData.signalScore || {};
   const funding = rawData.funding || [];
+  const launches = rawData.launches || [];
+  const trendsData = rawData.trends || [];
+  const redditData = rawData.reddit || [];
+  const base44 = internalData.base44 || { totalClicks: 0, topKeywords: [], entries: [] };
+  const ideasSample = internalData.ideas || [];
+  const rawProblemHeatmap = internalData.problemHeatmap || [];
+  // Use metadata.totalIdeas if available (all-time count), otherwise calculate from categories
+  const totalIdeaCount = internalData.metadata?.totalIdeas || 
+    (Array.isArray(categories)
+      ? categories.reduce((sum, cat) => sum + (cat.count || 0), 0)
+      : 0);
 
   // Only build sections that have content (weekday-based generation)
   const ideaSection = summaryBlocks.idea_futures ? buildIdeaFuturesSection(await translateBlock(summaryBlocks.idea_futures), categories) : '';
   
   // Clustering section: Only show on Monday (as "ONE MAJOR CLUSTER"), Tuesday (as "TOP 3 NEW CLUSTERS"), or Wednesday (as "DEEP CLUSTERING REPORT")
   // Monday should show clustering, but NOT as "THE CLUSTERING REPORT"
+  // For "all sections" mode, always build if we have content
   let clusteringSection = '';
   if (summaryBlocks.clustering) {
-    if (weekday.toLowerCase() === 'monday' || weekday.toLowerCase() === 'tuesday' || weekday.toLowerCase() === 'wednesday') {
+    const shouldShowClustering = includeAllSections || 
+      weekday.toLowerCase() === 'monday' || 
+      weekday.toLowerCase() === 'tuesday' || 
+      weekday.toLowerCase() === 'wednesday';
+    if (shouldShowClustering) {
       clusteringSection = buildClusteringSection(await translateBlock(summaryBlocks.clustering), clusters, weekday);
     }
   }
   
-  const validationSection = summaryBlocks.validation ? buildValidationSection(await translateBlock(summaryBlocks.validation), validation) : '';
-  const dealRadarSection = summaryBlocks.deal_radar ? buildDealRadarSection(await translateBlock(summaryBlocks.deal_radar), funding) : '';
-  const experimentSection = summaryBlocks.wednesday_experiment ? buildExperimentSection(await translateBlock(summaryBlocks.wednesday_experiment)) : '';
-  const founderSection = summaryBlocks.founder_field_note ? buildFounderFieldNoteSection(await translateBlock(summaryBlocks.founder_field_note)) : '';
-  const tomorrowSection = summaryBlocks.tomorrows_question ? buildTomorrowQuestionSection(await translateBlock(summaryBlocks.tomorrows_question)) : '';
+  const validationSummary = summaryBlocks.validation ? await translateBlock(summaryBlocks.validation) : '';
+  const lookbackDays = internalData.metadata?.lookbackDays || 365;
+  const validationSection = (summaryBlocks.validation || includeAllSections)
+    ? buildValidationSection(validationSummary, validation, totalIdeaCount, lookbackDays)
+    : '';
+  const dealRadarSummary = summaryBlocks.deal_radar ? await translateBlock(summaryBlocks.deal_radar) : '';
+  const dealRadarSection = (summaryBlocks.deal_radar || (includeAllSections && funding.length > 0))
+    ? buildDealRadarSection(dealRadarSummary, funding)
+    : '';
+  const experimentSummary = summaryBlocks.wednesday_experiment ? await translateBlock(summaryBlocks.wednesday_experiment) : '';
+  const wednesdayData = { totalIdeas: totalIdeaCount, validation };
+  const experimentSection = (summaryBlocks.wednesday_experiment || (includeAllSections && (totalIdeaCount || validation.mvp !== undefined)))
+    ? buildExperimentSection(experimentSummary, wednesdayData)
+    : '';
+  const founderSummary = summaryBlocks.founder_field_note ? await translateBlock(summaryBlocks.founder_field_note) : '';
+  const founderSection = (summaryBlocks.founder_field_note || (includeAllSections && rawProblemHeatmap.length))
+    ? buildFounderFieldNoteSection(founderSummary, rawProblemHeatmap)
+    : '';
+  const tomorrowSummary = summaryBlocks.tomorrows_question ? await translateBlock(summaryBlocks.tomorrows_question) : '';
+  const tomorrowSection = (summaryBlocks.tomorrows_question || (includeAllSections && trendsData.length))
+    ? buildTomorrowQuestionSection(tomorrowSummary, trendsData)
+    : '';
   const oneThingSection = summaryBlocks.one_thing_today ? buildOneThingSection(await translateBlock(summaryBlocks.one_thing_today)) : '';
   
   // Monday-specific sections
-  const weekendSpikesSection = summaryBlocks.weekend_spikes ? buildWeekendSpikesSection(await translateBlock(summaryBlocks.weekend_spikes)) : '';
-  const weeklyWatchlistSection = summaryBlocks.weekly_watchlist ? buildWeeklyWatchlistSection(await translateBlock(summaryBlocks.weekly_watchlist)) : '';
-  const trendsSection = summaryBlocks.trends ? buildTrendsSection(await translateBlock(summaryBlocks.trends)) : '';
+  const weekendSpikesSummary = summaryBlocks.weekend_spikes ? await translateBlock(summaryBlocks.weekend_spikes) : '';
+  const weekendSpikesSection = (summaryBlocks.weekend_spikes || (includeAllSections && categories.length > 0))
+    ? buildWeekendSpikesSection(weekendSpikesSummary, categories)
+    : '';
+
+  const weeklyWatchlistSummary = summaryBlocks.weekly_watchlist ? await translateBlock(summaryBlocks.weekly_watchlist) : '';
+  const weeklyWatchlistSection = (summaryBlocks.weekly_watchlist || (includeAllSections && (categories.length || clusters.length)))
+    ? buildWeeklyWatchlistSection(weeklyWatchlistSummary, categories, clusters)
+    : '';
+
+  const trendsSummary = summaryBlocks.trends ? await translateBlock(summaryBlocks.trends) : '';
+  const trendsSection = (summaryBlocks.trends || (includeAllSections && (trendsData.length || redditData.length)))
+    ? buildTrendsSection(trendsSummary, trendsData, redditData)
+    : '';
   
   // Tuesday-specific sections
-  const problemHeatmapSection = summaryBlocks.problem_heatmap ? buildProblemHeatmapSection(await translateBlock(summaryBlocks.problem_heatmap)) : '';
-  const opportunitiesInGapsSection = summaryBlocks.opportunities_in_gaps ? buildOpportunitiesInGapsSection(await translateBlock(summaryBlocks.opportunities_in_gaps)) : '';
-  const earlyMarketSignalsSection = summaryBlocks.early_market_signals ? buildEarlyMarketSignalsSection(await translateBlock(summaryBlocks.early_market_signals)) : '';
+  let problemHeatmapSection = '';
+  if (summaryBlocks.problem_heatmap || rawProblemHeatmap.length > 0) {
+    const translatedSummary = summaryBlocks.problem_heatmap ? await translateBlock(summaryBlocks.problem_heatmap) : '';
+    problemHeatmapSection = buildProblemHeatmapSection(translatedSummary, rawProblemHeatmap);
+  }
+
+  const opportunityData = {
+    categories,
+    problemHeatmap: rawProblemHeatmap,
+    validation
+  };
+  let opportunitiesInGapsSection = '';
+  if (summaryBlocks.opportunities_in_gaps || opportunityData.categories.length > 0) {
+    const translatedSummary = summaryBlocks.opportunities_in_gaps ? await translateBlock(summaryBlocks.opportunities_in_gaps) : '';
+    opportunitiesInGapsSection = buildOpportunitiesInGapsSection(translatedSummary, opportunityData);
+  }
+
+  const earlySignalsData = {
+    categories,
+    clusters,
+    problems: rawProblemHeatmap,
+    launches,
+    funding,
+    trends: trendsData,
+    reddit: redditData
+  };
+  let earlyMarketSignalsSection = '';
+  if (
+    summaryBlocks.early_market_signals ||
+    launches.length ||
+    funding.length ||
+    trendsData.length ||
+    redditData.length
+  ) {
+    const translatedSummary = summaryBlocks.early_market_signals ? await translateBlock(summaryBlocks.early_market_signals) : '';
+    earlyMarketSignalsSection = buildEarlyMarketSignalsSection(translatedSummary, earlySignalsData);
+  }
   
   // Thursday-specific sections
-  const whyIdeasFailSection = summaryBlocks.why_ideas_fail ? buildWhyIdeasFailSection(await translateBlock(summaryBlocks.why_ideas_fail)) : '';
-  const executionGapsSection = summaryBlocks.execution_gaps ? buildExecutionGapsSection(await translateBlock(summaryBlocks.execution_gaps)) : '';
-  const monthlyProgressSection = summaryBlocks.monthly_progress ? buildMonthlyProgressSection(await translateBlock(summaryBlocks.monthly_progress)) : '';
-  const antiHypeSection = summaryBlocks.anti_hype_section ? buildAntiHypeSection(await translateBlock(summaryBlocks.anti_hype_section)) : '';
-  const categoryTeardownSection = summaryBlocks.category_teardown ? buildCategoryTeardownSection(await translateBlock(summaryBlocks.category_teardown)) : '';
+  const whyIdeasFailSummary = summaryBlocks.why_ideas_fail ? await translateBlock(summaryBlocks.why_ideas_fail) : '';
+  const whyIdeasFailSection = (summaryBlocks.why_ideas_fail || (includeAllSections && categories.length))
+    ? buildWhyIdeasFailSection(whyIdeasFailSummary, { categories, validation })
+    : '';
+
+  const executionGapsSummary = summaryBlocks.execution_gaps ? await translateBlock(summaryBlocks.execution_gaps) : '';
+  const executionGapsSection = (summaryBlocks.execution_gaps || (includeAllSections && (validation.mvp !== undefined || base44.totalClicks)))
+    ? buildExecutionGapsSection(executionGapsSummary, { validation, base44, signalScore })
+    : '';
+
+  const monthlyProgressSummary = summaryBlocks.monthly_progress ? await translateBlock(summaryBlocks.monthly_progress) : '';
+  const monthlyProgressSection = (summaryBlocks.monthly_progress || (includeAllSections && totalIdeaCount))
+    ? buildMonthlyProgressSection(monthlyProgressSummary, { totalIdeas: totalIdeaCount, lookbackDays, validation })
+    : '';
+
+  const antiHypeSummary = summaryBlocks.anti_hype_section ? await translateBlock(summaryBlocks.anti_hype_section) : '';
+  const antiHypeSection = (summaryBlocks.anti_hype_section || (includeAllSections && categories.length))
+    ? buildAntiHypeSection(antiHypeSummary, { categories })
+    : '';
+
+  const categoryTeardownSummary = summaryBlocks.category_teardown ? await translateBlock(summaryBlocks.category_teardown) : '';
+  const categoryTeardownSection = (summaryBlocks.category_teardown || (includeAllSections && categories.length))
+    ? buildCategoryTeardownSection(categoryTeardownSummary, categories)
+    : '';
   
   // Friday-specific sections
-  const weeklyTop10Section = summaryBlocks.weekly_top_10_ideas ? buildWeeklyTop10Section(await translateBlock(summaryBlocks.weekly_top_10_ideas)) : '';
-  const clusterOfWeekSection = summaryBlocks.cluster_of_the_week ? buildClusterOfWeekSection(await translateBlock(summaryBlocks.cluster_of_the_week), clusters) : '';
-  const founderOfWeekSection = summaryBlocks.founder_of_the_week ? buildFounderOfWeekSection(await translateBlock(summaryBlocks.founder_of_the_week)) : '';
-  const highConfidenceSection = summaryBlocks.high_confidence_opportunities ? buildHighConfidenceSection(await translateBlock(summaryBlocks.high_confidence_opportunities)) : '';
-  const weekendChallengeSection = summaryBlocks.weekend_challenge ? buildWeekendChallengeSection(await translateBlock(summaryBlocks.weekend_challenge)) : '';
-  const mondayPreviewSection = summaryBlocks.monday_preview ? buildMondayPreviewSection(await translateBlock(summaryBlocks.monday_preview)) : '';
+  const weeklyTop10Summary = summaryBlocks.weekly_top_10_ideas ? await translateBlock(summaryBlocks.weekly_top_10_ideas) : '';
+  const weeklyTop10Section = (summaryBlocks.weekly_top_10_ideas || (includeAllSections && ideasSample.length))
+    ? buildWeeklyTop10Section(weeklyTop10Summary, ideasSample)
+    : '';
+
+  const clusterWeekSummary = summaryBlocks.cluster_of_the_week ? await translateBlock(summaryBlocks.cluster_of_the_week) : '';
+  const clusterOfWeekSection = (summaryBlocks.cluster_of_the_week || (includeAllSections && clusters.length))
+    ? buildClusterOfWeekSection(clusterWeekSummary, clusters)
+    : '';
+
+  const founderWeekSummary = summaryBlocks.founder_of_the_week ? await translateBlock(summaryBlocks.founder_of_the_week) : '';
+  const founderOfWeekSection = (summaryBlocks.founder_of_the_week || (includeAllSections && rawProblemHeatmap.length))
+    ? buildFounderOfWeekSection(founderWeekSummary, rawProblemHeatmap)
+    : '';
+
+  const highConfidenceSummary = summaryBlocks.high_confidence_opportunities ? await translateBlock(summaryBlocks.high_confidence_opportunities) : '';
+  const highConfidenceSection = (summaryBlocks.high_confidence_opportunities || (includeAllSections && (funding.length || categories.length)))
+    ? buildHighConfidenceSection(highConfidenceSummary, { funding, categories })
+    : '';
+
+  const weekendChallengeSummary = summaryBlocks.weekend_challenge ? await translateBlock(summaryBlocks.weekend_challenge) : '';
+  const weekendChallengeSection = (summaryBlocks.weekend_challenge || (includeAllSections && categories.length))
+    ? buildWeekendChallengeSection(weekendChallengeSummary, categories)
+    : '';
+
+  const mondayPreviewSummary = summaryBlocks.monday_preview ? await translateBlock(summaryBlocks.monday_preview) : '';
+  const mondayPreviewSection = (summaryBlocks.monday_preview || (includeAllSections && trendsData.length))
+    ? buildMondayPreviewSection(mondayPreviewSummary, trendsData)
+    : '';
 
   const sectionsMap = {
     idea_futures: ideaSection,
@@ -724,9 +1526,39 @@ async function fillTemplate(template, insights, targetDate = null) {
     one_thing_today: oneThingSection
   };
 
-  const sectionOrder = getSectionOrderForWeekday(weekday);
+  // Determine section order based on mode
+  let sectionOrder;
+  if (includeAllSections) {
+    // Use master order for -b.html (all sections)
+    sectionOrder = getAllSectionsMasterOrder();
+  } else {
+    // Use weekday-specific order for -a.html (day-specific sections)
+    sectionOrder = getSectionOrderForWeekday(weekday);
+  }
+  
   let mainSections = sectionOrder
-    .map(key => sectionsMap[key])
+    .map(key => {
+      const sectionHtml = sectionsMap[key];
+      if (includeAllSections) {
+        // For -b.html: show section if it has content, otherwise show "not enough data"
+        if (sectionHtml && sectionHtml.trim().length > 0) {
+          return sectionHtml;
+        } else {
+          // Check if we have the underlying data structure for this section
+          const hasDataStructure = checkSectionHasDataStructure(key, summaryBlocks, rawData, internalData);
+          if (hasDataStructure) {
+            // Data exists but AI didn't generate content - show empty section with note
+            return buildNotEnoughDataSection(key);
+          } else {
+            // No data structure at all - show "not enough data"
+            return buildNotEnoughDataSection(key);
+          }
+        }
+      } else {
+        // For -a.html: only show sections with content (existing behavior)
+        return sectionHtml;
+      }
+    })
     .filter(Boolean)
     .join('\n');
 
@@ -756,23 +1588,31 @@ export async function buildNewsletter(date = null) {
   console.log(`Building newsletter for date: ${targetDate} (today: ${new Date().toISOString()})...`);
 
   try {
-
     const templatePath = path.join(__dirname, 'template.html');
     const template = await fs.readFile(templatePath, 'utf-8');
 
     const insights = await loadInsights(targetDate);
     // Ensure we always use the targetDate, not the date from the insights file
     insights.date = targetDate;
-    const html = await fillTemplate(template, insights, targetDate);
 
     const outputDir = path.join(__dirname, '..', config.paths.output);
     await fs.mkdir(outputDir, { recursive: true });
 
-    const outputPath = path.join(outputDir, `${targetDate}.html`);
-    await fs.writeFile(outputPath, html);
+    // Generate -a.html (day-specific sections)
+    console.log('Generating day-specific newsletter (-a.html)...');
+    const htmlA = await fillTemplate(template, insights, targetDate, false);
+    const outputPathA = path.join(outputDir, `${targetDate}-a.html`);
+    await fs.writeFile(outputPathA, htmlA);
+    console.log(`Newsletter built: ${outputPathA}`);
 
-    console.log(`Newsletter built: ${outputPath}`);
-    return outputPath;
+    // Generate -b.html (all sections)
+    console.log('Generating full newsletter with all sections (-b.html)...');
+    const htmlB = await fillTemplate(template, insights, targetDate, true);
+    const outputPathB = path.join(outputDir, `${targetDate}-b.html`);
+    await fs.writeFile(outputPathB, htmlB);
+    console.log(`Newsletter built: ${outputPathB}`);
+
+    return { daySpecific: outputPathA, allSections: outputPathB };
   } catch (error) {
     console.error('Error building newsletter:', error);
     throw error;
@@ -783,8 +1623,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Accept date from command line: node newsletter/builder.js 2025-11-18
   const date = process.argv[2] || null;
   buildNewsletter(date)
-    .then(builtPath => {
-      console.log(`Newsletter generated at: ${builtPath}`);
+    .then(result => {
+      if (typeof result === 'object' && result.daySpecific && result.allSections) {
+        console.log(`Newsletter generated:`);
+        console.log(`  Day-specific: ${result.daySpecific}`);
+        console.log(`  All sections: ${result.allSections}`);
+      } else {
+        console.log(`Newsletter generated at: ${result}`);
+      }
       process.exit(0);
     })
     .catch(error => {

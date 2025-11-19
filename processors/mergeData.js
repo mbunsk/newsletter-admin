@@ -115,6 +115,7 @@ export function mergeData(internal, external) {
       validation: internal.validation || {},
       problemHeatmap: internal.problemHeatmap || [],
       signalScore: internal.signalScore || {},
+      base44: internal.base44 || { totalClicks: 0, topKeywords: [], entries: [] },
       ideas: internal.ideas || [], // Include ideas for AI analysis
       metadata: internal.metadata || {} // Include metadata for totalIdeas count
     },

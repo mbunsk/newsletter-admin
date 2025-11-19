@@ -310,6 +310,39 @@ function extractKeywords(text) {
 }
 
 /**
+ * Parse Base44 click log line (format: "Email: ... | Keyword: ... | IP: ...")
+ * @param {string} line - Log line
+ * @param {string} date - Date string (YYYY-MM-DD)
+ * @returns {Object|null} Parsed click entry
+ */
+function parseBase44Line(line, date) {
+  if (!line || !line.trim()) {
+    return null;
+  }
+
+  const trimmed = line.trim();
+  const emailMatch = trimmed.match(/Email:\s*([^|]+)/i);
+  const keywordMatch = trimmed.match(/Keyword:\s*([^|]+)/i);
+  const ipMatch = trimmed.match(/IP:\s*([^|]+)/i);
+
+  const email = emailMatch ? emailMatch[1].trim() : '';
+  const keyword = keywordMatch ? keywordMatch[1].trim() : '';
+  const ip = ipMatch ? ipMatch[1].trim() : '';
+
+  if (!email && !keyword && !ip) {
+    return null;
+  }
+
+  return {
+    email,
+    keyword,
+    ip,
+    date,
+    raw: trimmed
+  };
+}
+
+/**
  * Fetch and parse overall log file
  * @returns {Promise<Array>} Array of all ideas
  */
@@ -462,6 +495,49 @@ export async function fetchChartData() {
     return entries;
   } catch (error) {
     console.warn('Chart data not available:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Fetch Base44 click logs for a specific date
+ * @param {string|null} date - Date string (YYYY-MM-DD). Defaults to today.
+ * @returns {Promise<Array>} Array of click entries
+ */
+export async function fetchBase44Clicks(date = null) {
+  const targetDate = date || getDateString();
+  const url = `https://validatorai.com/click/logs/${encodeURIComponent(targetDate)}-base44.txt`;
+
+  try {
+    console.log(`Fetching Base44 clicks from ${url}...`);
+    const content = await fetchLogFile(url);
+    if (!content) {
+      return [];
+    }
+
+    const lines = content.split('\n');
+    const entries = [];
+    const seen = new Set();
+
+    for (const line of lines) {
+      const entry = parseBase44Line(line, targetDate);
+      if (entry) {
+        const key = `${entry.date}|${entry.email}|${entry.keyword}|${entry.ip}`.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          entries.push(entry);
+        }
+      }
+    }
+
+    console.log(`Parsed ${entries.length} Base44 click entries for ${targetDate}`);
+    return entries;
+  } catch (error) {
+    if (error.response && error.response.status === 404) {
+      console.log(`Base44 click log not found for ${targetDate}`);
+      return [];
+    }
+    console.warn(`Error fetching Base44 clicks for ${targetDate}:`, error.message);
     return [];
   }
 }

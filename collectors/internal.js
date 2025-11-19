@@ -12,6 +12,7 @@ import {
   fetchOverallLog, 
   fetchDailyLogs, 
   fetchChartData,
+  fetchBase44Clicks,
   parseLogDate 
 } from '../utils/logParser.js';
 import { fileURLToPath } from 'url';
@@ -720,10 +721,11 @@ export async function collectInternalData(date = null) {
   try {
     // Fetch log files
     console.log('Fetching log files...');
-    const [overallIdeas, dailyIdeas, chartEntries] = await Promise.all([
+    const [overallIdeas, dailyIdeas, chartEntries, base44ClicksRaw] = await Promise.all([
       fetchOverallLog(),
       fetchDailyLogs(30), // Fetch last 30 days of daily logs
-      fetchChartData()
+      fetchChartData(),
+      fetchBase44Clicks(today)
     ]);
     
     // Combine all ideas
@@ -742,6 +744,7 @@ export async function collectInternalData(date = null) {
     
     console.log(`Total unique ideas: ${uniqueIdeas.length}`);
     console.log(`Total chart entries: ${chartEntries.length}`);
+    console.log(`Base44 clicks for ${today}: ${base44ClicksRaw.length}`);
     
     // Get date ranges for calculations
     const currentWeekStart = getDateDaysAgo(7);
@@ -818,6 +821,27 @@ export async function collectInternalData(date = null) {
     const clusters = getClusters(lookbackIdeas, previousWeekIdeas, categories, problemHeatmap);
     const validation = getValidationStats(uniqueIdeas);
     const signalScore = getSignalScoreStats(uniqueIdeas);
+
+    // Aggregate Base44 click data (top keywords)
+    const base44KeywordCounts = {};
+    base44ClicksRaw.forEach(click => {
+      const keyword = (click.keyword || 'unknown').toLowerCase();
+      base44KeywordCounts[keyword] = (base44KeywordCounts[keyword] || 0) + 1;
+    });
+
+    const base44TopKeywords = Object.entries(base44KeywordCounts)
+      .map(([keyword, count]) => ({
+        keyword,
+        count
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    const base44 = {
+      totalClicks: base44ClicksRaw.length,
+      topKeywords: base44TopKeywords,
+      entries: base44ClicksRaw
+    };
     
     const data = {
       date: today,
@@ -826,6 +850,7 @@ export async function collectInternalData(date = null) {
       validation,
       problemHeatmap,
       signalScore,
+      base44,
       ideas: uniqueIdeas.slice(0, 100), // Include sample ideas for AI analysis (limit to 100 to avoid large files)
       metadata: {
         collectedAt: new Date().toISOString(),
@@ -835,7 +860,8 @@ export async function collectInternalData(date = null) {
         currentWeekCount: currentWeekIdeas.length,
         previousWeekCount: previousWeekIdeas.length,
         currentWeekChartCount: currentWeekChartEntries.length,
-        previousWeekChartCount: previousWeekChartEntries.length
+        previousWeekChartCount: previousWeekChartEntries.length,
+        base44Clicks: base44ClicksRaw.length
       }
     };
     

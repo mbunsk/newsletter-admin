@@ -60,7 +60,7 @@ export async function translateToEnglish(text) {
         }
       ],
       temperature: 0.3,
-      max_tokens: 500
+      max_completion_tokens: 500
     });
     
     const translated = response.choices[0]?.message?.content?.trim() || text;
@@ -126,7 +126,7 @@ export async function summarize(text, options = {}) {
           content: prompt
         }
       ],
-      max_tokens: config.openai.maxTokens,
+      max_completion_tokens: config.openai.maxTokens,
       temperature: config.openai.temperature
     });
     
@@ -318,23 +318,25 @@ Prompt:
 Generate ONLY content for the validation section. Do NOT include other sections.
 Analyze internal founder behavior using:
 – percentage of users who have a landing page (website yes/no)
-– percentage progressing toward an MVP (Base44 click-through rate)
+– percentage progressing toward an MVP (MVP Ready percentage)
 – distribution of idea categories among those who are building
 – distribution of categories among those who are not building
 – any week-over-week or month-over-month movement
 – any category where execution is unusually high or low
 
-Write a 3–4 sentence “Reality Check” snapshot that includes:
-One painful truth about execution (ex: “most founders stop at idea submission”)
-One encouraging signal (ex: “this one niche is actually building”)
+Write a 3–4 sentence "Reality Check" snapshot that includes:
+One painful truth about execution (ex: "most founders stop at idea submission")
+One encouraging signal (ex: "this one niche is actually building")
 One sharp insight about who is moving and who is stalling
 A tone that feels blunt, data-driven, and motivational
 
+Focus ONLY on MVP progression metrics. Do NOT mention paying customers, revenue, or launched status.
+
 Use direct language:
-– “Here’s what founders are actually doing vs what they say they want to do.”
-– “This category is all talk; this one is quietly building.”
-– “Idea volume is rising but execution is flat.”
-– “MVP momentum is clustered in just two markets.”
+– "Here's what founders are actually doing vs what they say they want to do."
+– "This category is all talk; this one is quietly building."
+– "Idea volume is rising but execution is flat."
+– "MVP momentum is clustered in just two markets."
 
 Avoid fluff.
 This section should hit like a cold shower.
@@ -669,7 +671,7 @@ The output must be cohesive, high-signal, written in Terminal voice, and follow 
             content: `${routerPrompt}\n\nData: ${JSON.stringify(routerData, null, 2)}`
           }
         ],
-        max_tokens: config.openai.maxTokens || 4000,
+        max_completion_tokens: config.openai.maxTokens || 4000,
         temperature: config.openai.temperature || 0.7
       });
       
@@ -700,7 +702,7 @@ The output must be cohesive, high-signal, written in Terminal voice, and follow 
           content: `Section: ${section}\n\n${sectionSpecificPrompt}\n\nData: ${JSON.stringify(data, null, 2)}`
         }
       ],
-      max_tokens: config.openai.maxTokens,
+      max_completion_tokens: config.openai.maxTokens,
       temperature: config.openai.temperature
     });
     
@@ -750,7 +752,7 @@ async function generateFallbackInsight(data, section) {
       }
     }
     if (section === 'validation' && data.stats) {
-      return `Validation metrics: ${((data.stats.mvp || 0) * 100).toFixed(1)}% at MVP stage, ${((data.stats.paying || 0) * 100).toFixed(1)}% with paying customers.`;
+      return `Validation metrics: ${((data.stats.mvp || 0) * 100).toFixed(1)}% at MVP stage.`;
     }
     if (section === 'deal_radar' && data.funding) {
       const topDeal = data.funding[0];
@@ -800,10 +802,9 @@ async function generateFallbackInsight(data, section) {
       const totalIdeas = data.totalIdeas || 0;
       const validation = data.validation || {};
       const mvpPct = ((validation.mvp || 0) * 100).toFixed(1);
-      const payingPct = ((validation.paying || 0) * 100).toFixed(1);
       return totalIdeas
-        ? `${totalIdeas.toLocaleString()} ideas reviewed; only ${mvpPct}% have an MVP and ${payingPct}% see revenue. Most teams still struggle to prove demand with real customers.`
-        : `Most submissions still lack proof. Only ${mvpPct}% have an MVP and ${payingPct}% see revenue — validation remains the bottleneck.`;
+        ? `${totalIdeas.toLocaleString()} ideas reviewed; only ${mvpPct}% have progressed to MVP stage. Most teams still struggle to move from idea to execution.`
+        : `Most submissions still lack proof. Only ${mvpPct}% have an MVP — validation remains the bottleneck.`;
     }
     if (section === 'founder_field_note' && data.problems) {
       const topProblem = data.problems[0];
@@ -984,7 +985,7 @@ export async function extractKeyPoints(text, maxPoints = 5) {
           content: `Extract the top ${maxPoints} key points from this text:\n\n${text}`
         }
       ],
-      max_tokens: 500,
+      max_completion_tokens: 500,
       temperature: 0.5
     });
     

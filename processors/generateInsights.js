@@ -40,6 +40,7 @@ async function prepareDataBlocks(mergedData, targetDate) {
   
   // Extract weekday and add to all blocks
   const newsletter_day = getWeekdayName(targetDate);
+  const base44 = mergedData.internal.base44 || { totalClicks: 0, topKeywords: [], entries: [] };
   
   // Add newsletter_day to all data blocks so the AI router can use it
   blocks._metadata = {
@@ -166,6 +167,21 @@ async function prepareDataBlocks(mergedData, targetDate) {
     0
   );
 
+  blocks.execution_gaps = {
+    validation: mergedData.internal.validation || {},
+    categories: mergedData.internal.categories || [],
+    signalScore: mergedData.internal.signalScore || {},
+    base44,
+    summary: `Base44 clicks captured: ${base44.totalClicks}`
+  };
+
+  blocks.monthly_progress = {
+    validation: mergedData.internal.validation || {},
+    totalIdeas,
+    base44,
+    categories: mergedData.internal.categories || []
+  };
+
   blocks.wednesday_experiment = {
     totalIdeas,
     validation: mergedData.internal.validation || {},
@@ -279,13 +295,18 @@ export async function generateInsights(date = null) {
                clusters: mergedData.internal.clusters,
                validation: mergedData.internal.validation,
                problemHeatmap: dataBlocks.problem_heatmap.problems, // Use translated problems
-               signalScore: mergedData.internal.signalScore
+              signalScore: mergedData.internal.signalScore,
+              base44: mergedData.internal.base44,
+              ideas: mergedData.internal.ideas,
+              metadata: mergedData.internal.metadata
              },
         categories: mergedData.internal.categories,
         clusters: mergedData.internal.clusters,
         validation: mergedData.internal.validation,
         funding: mergedData.external.funding,
         launches: mergedData.external.launches,
+        trends: mergedData.external.trends,
+        reddit: mergedData.external.reddit,
         articles: mergedData.external.articles,
         correlations: mergedData.correlations
       },
