@@ -58,9 +58,12 @@ export default {
     techcrunch: [
       'https://techcrunch.com/feed/',
       'https://techcrunch.com/category/venture/feed/',
+      'https://techcrunch.com/category/startups/feed/',
       'https://techcrunch.com/feed/?s=signals'
     ],
-    venturebeat: 'https://venturebeat.com/feed/'
+    venturebeat: 'https://venturebeat.com/feed/',
+    crunchbaseFunding: 'https://news.crunchbase.com/feed/?s=fund',
+    techfundingnews: 'https://techfundingnews.com/?s=funding&feed=rss2'
   },
 
   // Google Trends API (if using unofficial package)
@@ -131,7 +134,7 @@ export default {
       intro: 'Need a landing page to test your idea in 48 hours?',
       pitch: 'Base44 mocks one up in 44 seconds.',
       offer: 'First 100 ValidatorAI readers get $10 credit with code TERMINAL.',
-      url: null
+      url: 'https://validatorai.com/click/?a=base44'
     },
     autoPublish: false // Set to true to auto-publish instead of draft
   }

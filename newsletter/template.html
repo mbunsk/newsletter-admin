@@ -156,7 +156,10 @@
             font-weight: 600;
             color: #1f2937;
             text-transform: capitalize;
-            min-width: 180px;
+            width: 230px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .mover-bar-text {
             display: inline-block;
@@ -181,6 +184,100 @@
             color: #475569;
             font-weight: 500;
             margin-bottom: 16px;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin: 20px 0 24px;
+        }
+        .metric-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 12px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+        .metric-card:hover {
+            background-color: #f1f5f9;
+            border-color: #cbd5e1;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        .metric-icon {
+            font-size: 24px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .metric-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .metric-label {
+            font-size: 13px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.2;
+        }
+        .signal-rules-box {
+            background-color: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        .signal-rules-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .signal-rules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+        }
+        .signal-rule-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background-color: #ffffff;
+            border-radius: 8px;
+        }
+        .rule-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .rule-label {
+            font-size: 13px;
+            color: #475569;
+            flex: 1;
+        }
+        .rule-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+        }
+        .keyword-icon {
+            margin-right: 6px;
+        }
+        .click-count {
+            color: #64748b;
+            font-size: 14px;
         }
         .cluster-card,
         .deal-card,

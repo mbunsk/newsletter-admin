@@ -190,7 +190,7 @@ One Thing To Do Today
 THURSDAY — Reality Check Thursday
 Required sections:
 Why Ideas Fail (Based on internal data)
-Execution Gaps (Across landing pages, MVP momentum, Base44 clicks)
+Execution Gaps (Landing page progression, Base44 click engagement)
 Monthly Progress Snapshot (Idea → MVP → Revenue)
 Anti-Hype Section (Overbuilt or dead markets)
 Category Deep Dive (e.g., AI agents, Legal AI, Parenting Tech)
@@ -466,10 +466,12 @@ Make it curiosity-driven, not clickbait.
 
 11. one_thing_today — The Daily Founder Action
 Prompt:
-Based on today's data, recommend one specific, 10–20 minute action a founder can take right now.
+Based on today's data, especially the top trending categories and validation metrics, recommend one specific, 10–20 minute action a founder can take right now.
+Reference the top category or category trend when relevant (e.g., "List 50 [top category] operators" or "Find 10 [top category] founders who...").
 It must be concrete, measurable, and immediately helpful.
 Write in 2 sentences maximum.
 Make it feel like a challenge.
+If a specific category is trending (high growth), tailor the action to that category.
 
 12. weekend_spikes — Weekend Activity Analysis (Monday only)
 Prompt:
@@ -499,11 +501,12 @@ Be blunt and data-driven.
 
 15. execution_gaps — Execution Bottleneck Analysis (Thursday only)
 Prompt:
-Analyze execution metrics: landing page %, Base44 click-through %, MVP progression rates.
+Analyze execution metrics: landing page progression (using MVP data), Base44 click engagement.
 Write 3–4 sentences identifying:
 – where founders are getting stuck (idea → landing page, landing page → MVP, etc.)
 – which categories have execution gaps
 – what the data says about founder behavior vs. stated intentions
+Note: Landing page metric shows MVP progression percentage. MVP ready is not displayed. Base44 clicks shows actual engagement count.
 
 16. monthly_progress — Monthly Progress Snapshot (Thursday only)
 Prompt:
@@ -619,7 +622,7 @@ If newsletter_day = Thursday
 
 Generate:
 why_ideas_fail (use validation + clustering inputs)
-execution_gaps (MVP, landing pages, Base44 metrics)
+execution_gaps (Landing page progression, Base44 click engagement)
 monthly_progress (idea → MVP → revenue trends)
 anti_hype_section (markets to avoid)
 category_teardown
@@ -934,11 +937,11 @@ function getRequiredSectionsForWeekday(weekday) {
   if (day === 'monday') {
     // MONDAY — Trendline Monday
     // Required: Idea Futures Index, Weekend Spikes, This Week's Watchlist, One Major Cluster, Micro-Trends, One Thing To Do Today
-    return ['idea_futures', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'];
+    return ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'];
   } else if (day === 'tuesday') {
     // TUESDAY — Market Map Tuesday
     // Required: Idea Futures Index, Top 3 New Clusters, Customer Pain Analysis, Opportunities in the Gaps, Early Market Signals, Dealflow that Matches Clusters, One Thing To Do Today
-    return ['idea_futures', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'];
+    return ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'];
   } else if (day === 'wednesday') {
     // WEDNESDAY — Pattern Watch Wednesday
     // Required: Idea Futures Index, Deep Clustering Report, Validation Reality Check, Deal Radar, Wednesday Experiment, Founder Field Note, Tomorrow's Question, One Thing To Do Today
@@ -946,11 +949,11 @@ function getRequiredSectionsForWeekday(weekday) {
   } else if (day === 'thursday') {
     // THURSDAY — Reality Check Thursday
     // Required: Idea Futures Index, Why Ideas Fail, Execution Gaps, Monthly Progress Snapshot, Anti-Hype Section, Category Deep Dive, One Thing To Do Today, Tomorrow's Question
-    return ['idea_futures', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'];
+    return ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'];
   } else if (day === 'friday') {
     // FRIDAY — Cohort Report Friday
     // Required: Idea Futures Index, Top 10 Ideas of the Week, Cluster-of-the-Week, Founder-of-the-Week, Micro Funding Roundup, High-Confidence Opportunities, The Weekend Challenge, Preview of Monday
-    return ['idea_futures', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'];
+    return ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'];
   }
   
   // Default: return all common sections

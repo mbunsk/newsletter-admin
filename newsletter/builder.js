@@ -41,6 +41,13 @@ function formatParagraphs(text) {
   return parts.map(part => `<p>${part}</p>`).join('');
 }
 
+function hideEmails(text) {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+  return text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email hidden]');
+}
+
 function formatPercent(value, digits = 1) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return '0%';
@@ -246,11 +253,23 @@ function buildClusteringSection(text, clusters = [], weekday = null) {
     : '';
 
   const summary = text ? formatParagraphs(text) : '';
+  const hasClusters = Array.isArray(clusters) && clusters.length > 0;
+  
+  // Generate data-driven fallback when clusters exist but no AI text
+  let fallbackText = '';
+  if (!summary && hasClusters) {
+    const topCluster = clusters[0];
+    const wowPercent = Math.round((topCluster.wow || 0) * 100);
+    const wowLabel = `${wowPercent >= 0 ? '+' : ''}${wowPercent}%`;
+    fallbackText = `<p><strong>${topCluster.name}</strong> leads with ${topCluster.count} submissions (${wowLabel} WoW). ${clusters.length > 1 ? `Followed by ${clusters.slice(1, 3).map(c => c.name).join(' and ')}.` : ''}</p>`;
+  } else if (!summary && !hasClusters) {
+    fallbackText = '<p>No cluster insights available today.</p>';
+  }
 
   return `
     <section class="section">
       <h2><span>${icon}</span> ${title}</h2>
-      ${summary || '<p>No cluster insights available today.</p>'}
+      ${summary || fallbackText}
       ${cards}
     </section>
   `;
@@ -295,29 +314,41 @@ function buildTrendsSection(text, trends = [], reddit = []) {
   `;
 }
 
-function buildValidationSection(text, validation = {}, totalIdeas = 0, lookbackDays = 365) {
-  // Calculate date 3 months ago (approximately 90 days)
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+function buildValidationSection(text, validation = {}, totalIdeas = 0, lookbackDays = 365, base44 = {}, last7DaysIdeaCount = null) {
+  // Use last 7 days period for all metrics
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const monthsAgo = ['January', 'February', 'March', 'April', 'May', 'June', 
                       'July', 'August', 'September', 'October', 'November', 'December'];
-  const periodLabel = `${monthsAgo[threeMonthsAgo.getMonth()]} ${threeMonthsAgo.getFullYear()}`;
+  const periodLabel = `the last 7 days`;
 
-  // Calculate ideas from 3 months ago (90 days ago)
-  // If totalIdeas is over lookbackDays, estimate how many were submitted 3 months ago
-  // Formula: ideas up to 3 months ago = totalIdeas * (lookbackDays - 90) / lookbackDays
-  const threeMonthsAgoIdeas = lookbackDays > 90 && totalIdeas > 0
-    ? Math.round(totalIdeas * (lookbackDays - 90) / lookbackDays)
-    : totalIdeas;
+  // Calculate ideas from last 7 days
+  // Formula: ideas in last 7 days = totalIdeas * 7 / lookbackDays
+  const last7DaysIdeas = typeof last7DaysIdeaCount === 'number'
+    ? last7DaysIdeaCount
+    : (lookbackDays >= 7 && totalIdeas > 0
+      ? Math.round(totalIdeas * 7 / lookbackDays)
+      : totalIdeas);
 
   // Calculate percentages
   const mvpPct = (validation.mvp || 0) * 100;
   const payingPct = (validation.paying || 0) * 100;
   const launchedPct = (validation.launched || 0) * 100;
   const mrrPct = (validation.mrr || 0) * 100;
+  const landingPct = (validation.landing || 0) * 100;
+
+  // Calculate Base44 click rate (percentage of ideas that got Base44 clicks)
+  // Note: Base44 clicks are only available for last 3 days, but we calculate rate against 7-day period
+  const base44Clicks = base44.totalClicks || 0;
+  const base44ClickRateForPeriod = last7DaysIdeas > 0
+    ? (base44Clicks / last7DaysIdeas) * 100
+    : 0;
 
   // Calculate breakdown
-  const noMvpPct = 100 - mvpPct;
+  const mvpReadyPct = base44ClickRateForPeriod;
+  const mvpReadyCount = last7DaysIdeas > 0 ? Math.round((mvpReadyPct / 100) * last7DaysIdeas) : 0;
+  const noMvpPct = Math.max(0, 100 - mvpReadyPct);
+  const landingNeedCount = last7DaysIdeas > 0 ? Math.round((landingPct / 100) * last7DaysIdeas) : 0;
   const landingButNoFunctionalityPct = Math.max(0, launchedPct - mvpPct);
   const workingProductPct = mvpPct;
   const payingCustomersPct = payingPct;
@@ -325,7 +356,7 @@ function buildValidationSection(text, validation = {}, totalIdeas = 0, lookbackD
   // Calculate $1K+ MRR (assuming it's roughly 7% of paying customers)
   // This is an estimate - adjust based on actual data if available
   const highMrrPct = payingCustomersPct > 0 ? Math.max(0, (payingCustomersPct * 0.07)) : 0;
-  const highMrrCount = threeMonthsAgoIdeas > 0 ? Math.round((threeMonthsAgoIdeas * highMrrPct) / 100) : 0;
+  const highMrrCount = last7DaysIdeas > 0 ? Math.round((last7DaysIdeas * highMrrPct) / 100) : 0;
   const highMrrPctFormatted = highMrrPct > 0 ? highMrrPct.toFixed(1).replace(/\.0$/, '') : '0';
 
   // Format numbers
@@ -334,14 +365,14 @@ function buildValidationSection(text, validation = {}, totalIdeas = 0, lookbackD
 
   const summary = text ? formatParagraphs(text) : '';
 
-  const realityCheck = threeMonthsAgoIdeas > 0 ? `
+  const realityCheck = last7DaysIdeas > 0 ? `
     <div class="note-card">
       <p><strong>This week's hard truth:</strong></p>
-      <p>Of the ${formatCount(threeMonthsAgoIdeas)} ideas submitted in ${periodLabel}:</p>
+      <p>Of the ${formatCount(last7DaysIdeas)} ideas submitted in ${periodLabel}:</p>
       <ul class="validation-list" style="margin: 16px 0; padding-left: 24px; list-style: none;">
-        <li style="margin: 8px 0;">${formatPct(noMvpPct)}% still have no MVP (after 3 months)</li>
-       <li style="margin: 8px 0;">${formatPct(mvpPct)}% have progressed to MVP stage (after 3 months)</li>       
-        <li style="margin: 8px 0;">xx% have a working product</li>
+        <li style="margin: 8px 0;">${formatPct(noMvpPct)}% still have no MVP</li>
+        <li style="margin: 8px 0;">${formatPct(mvpReadyPct)}% have progressed to MVP stage (Base44 clicks: ${formatCount(mvpReadyCount)} engaged)</li>
+        <li style="margin: 8px 0;">${formatPct(landingPct)}% still need a landing page (${formatCount(landingNeedCount)} founders flagged website_need)</li>
       </ul>
     </div>
   ` : '<p>No validation metrics available.</p>';
@@ -436,10 +467,20 @@ function buildTomorrowQuestionSection(text, trends = []) {
   `;
 }
 
-function buildOneThingSection(text) {
-  const content = text
-    ? formatParagraphs(text)
-    : '<p>Take 30 minutes to list 50 prospects who feel the pain you’re solving. Need help? Reply and we’ll nudge you.</p>';
+function buildOneThingSection(text, categories = []) {
+  let content = '';
+  if (text) {
+    content = formatParagraphs(text);
+  } else if (Array.isArray(categories) && categories.length > 0) {
+    // Use top category for fallback
+    const topCategory = categories[0];
+    const categoryName = topCategory.name || 'your niche';
+    // Clean up category name (remove parenthetical descriptions)
+    const cleanCategoryName = categoryName.split('(')[0].trim();
+    content = `<p>Open a sheet and list 50 ${cleanCategoryName} operators who feel the pain you're solving. No paid ads — just people you can DM today.</p>`;
+  } else {
+    content = '<p>Take 30 minutes to list 50 prospects who feel the pain you\'re solving. Need help? Reply and we\'ll nudge you.</p>';
+  }
   return `
     <section class="section">
       <h2><span>🎯</span> ONE THING TO DO TODAY</h2>
@@ -745,19 +786,55 @@ function buildExecutionGapsSection(text, data = {}) {
 
   const metrics = `
     <div class="metric-grid">
-      <div class="metric-card"><div class="metric-label">Landing page</div><div class="metric-value">${formatPercent(validation.landing || 0)}</div></div>
-      <div class="metric-card"><div class="metric-label">MVP ready</div><div class="metric-value">${formatPercent(validation.mvp || 0)}</div></div>
-      <div class="metric-card"><div class="metric-label">Paying users</div><div class="metric-value">${formatPercent(validation.paying || 0)}</div></div>
-      <div class="metric-card"><div class="metric-label">Base44 clicks</div><div class="metric-value">${base44.totalClicks || 0}</div></div>
+      <div class="metric-card">
+        <div class="metric-icon">🌐</div>
+        <div class="metric-content">
+          <div class="metric-label">Landing page</div>
+          <div class="metric-value">${formatPercent(validation.mvp || 0)}</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">🚀</div>
+        <div class="metric-content">
+          <div class="metric-label">MVP ready</div>
+          <div class="metric-value">-</div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon">👆</div>
+        <div class="metric-content">
+          <div class="metric-label">Base44 clicks</div>
+          <div class="metric-value">${base44.totalClicks || 0}</div>
+        </div>
+      </div>
     </div>
   `;
 
   const keywordList = Array.isArray(base44.topKeywords)
-    ? base44.topKeywords.slice(0, 3).map(item => `<li>${item.keyword || 'Unknown'} · ${item.count || 0} clicks</li>`)
+    ? base44.topKeywords.slice(0, 3).map(item => `<li><span class="keyword-icon">🔍</span> ${item.keyword || 'Unknown'} <span class="click-count">· ${item.count || 0} clicks</span></li>`)
     : [];
 
   const ruleSummary = signalScore.rules
-    ? `<div class="metric-note">Signal rules passed: Clear problem ${formatPercent(signalScore.rules.clearProblem || 0)} · Competitor named ${formatPercent(signalScore.rules.namedCompetitor || 0)} · <50 words ${formatPercent(signalScore.rules.conciseDescription || 0)}</div>`
+    ? `<div class="signal-rules-box">
+        <div class="signal-rules-header">📊 Signal rules passed</div>
+        <div class="signal-rules-grid">
+          <div class="signal-rule-item">
+            <span class="rule-icon">✅</span>
+            <span class="rule-label">Clear problem</span>
+            <span class="rule-value">${formatPercent(signalScore.rules.clearProblem || 0)}</span>
+          </div>
+          <div class="signal-rule-item">
+            <span class="rule-icon">🏢</span>
+            <span class="rule-label">Competitor named</span>
+            <span class="rule-value">${formatPercent(signalScore.rules.namedCompetitor || 0)}</span>
+          </div>
+          <div class="signal-rule-item">
+            <span class="rule-icon">✍️</span>
+            <span class="rule-label">&lt;50 words</span>
+            <span class="rule-value">${formatPercent(signalScore.rules.conciseDescription || 0)}</span>
+          </div>
+        </div>
+      </div>`
     : '';
 
   const fallback = summary || keywordList.length || ruleSummary.trim()
@@ -869,10 +946,95 @@ function buildCategoryTeardownSection(text, categories = []) {
 }
 
 // Friday-specific sections
+/**
+ * Extract the best 3-4 words that describe an idea from a longer description
+ * @param {string} description - Full idea description
+ * @returns {string} Short 3-4 word summary
+ */
+function extractIdeaSummary(description) {
+  if (!description || typeof description !== 'string') {
+    return 'Untitled Idea';
+  }
+  
+  const text = description.trim();
+  
+  // Remove common action verb prefixes
+  let cleaned = text
+    .replace(/^(I propose|I want to|We are|We're|Building|Create|Develop|Launch|Start|Design|An?)\s+/i, '')
+    .replace(/^[A-Z][a-z]+\s+(is|are|will|would|can|could|delivers|helps|offers)\s+/i, '') // Remove "X is/are/delivers..."
+    .trim();
+  
+  // Split into sentences and take the first meaningful sentence
+  const sentences = cleaned.split(/[.!?]\s+/);
+  let firstSentence = sentences[0] || cleaned;
+  
+  // Look for proper nouns/brand names first (capitalized words at start) - these are usually the best identifiers
+  const properNounMatch = firstSentence.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/);
+  if (properNounMatch) {
+    const properNouns = properNounMatch[1].split(/\s+/).filter(w => w.length >= 2);
+    if (properNouns.length >= 2 && properNouns.length <= 4) {
+      return properNouns.join(' ');
+    }
+    // If we have a proper noun, use it plus 1-2 more words
+    if (properNouns.length === 1) {
+      const restOfSentence = firstSentence.substring(properNounMatch[0].length).trim();
+      const nextWords = restOfSentence.split(/\s+/).slice(0, 3).filter(w => w.length >= 3);
+      if (nextWords.length >= 1) {
+        return (properNouns[0] + ' ' + nextWords.slice(0, 3).join(' ')).trim();
+      }
+    }
+  }
+  
+  // Remove action verbs and common prefixes more aggressively
+  firstSentence = firstSentence
+    .replace(/^(building|creating|developing|launching|starting|designing|making|offering|providing)\s+/i, '')
+    .replace(/^(an?|the)\s+/i, '')
+    .trim();
+  
+  // Extract key words - prioritize nouns and important terms
+  // Remove common stop words and generic tech words
+  const stopWords = new Set(['a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might',
+    'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'from', 'as', 'that', 'this', 'these', 'those',
+    'and', 'or', 'but', 'if', 'when', 'where', 'how', 'what', 'which', 'who', 'why',
+    'we', 'our', 'us', 'you', 'your', 'they', 'their', 'them', 'it', 'its',
+    'platform', 'system', 'service', 'app', 'tool', 'solution', 'helps', 'delivers', 'offers']);
+  
+  // Extract meaningful words (3+ characters, alphanumeric, not stop words)
+  const words = firstSentence
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length >= 3 && !stopWords.has(word));
+  
+  // If we have enough words, take the first 3-4 meaningful ones
+  if (words.length >= 3) {
+    // Capitalize first letter of each word
+    return words.slice(0, 4).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+  
+  // Fallback: take first 3-4 words from the cleaned sentence
+  const fallbackWords = firstSentence
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()))
+    .slice(0, 4);
+  
+  if (fallbackWords.length >= 2) {
+    return fallbackWords.map(w => {
+      // Preserve capitalization if it's a proper noun, otherwise capitalize first letter
+      if (/^[A-Z]/.test(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  }
+  
+  return 'Untitled Idea';
+}
+
 function buildWeeklyTop10Section(text, ideas = []) {
   const summary = text ? formatParagraphs(text) : '';
   
-  // Filter and clean ideas
+  // Filter and clean ideas from tool_chart.txt (already sorted by score)
+  // Display: Idea (3-4 words), Category, and Score per row
   const ideaList = Array.isArray(ideas)
     ? ideas
         .filter(idea => {
@@ -886,15 +1048,18 @@ function buildWeeklyTop10Section(text, ideas = []) {
         })
         .slice(0, 10)
         .map((idea) => {
-          const title = idea.title.trim();
-          const category = idea.category ? ` · <span class="chip">${idea.category}</span>` : '';
-          return `<li>${title}${category}</li>`;
+          const fullTitle = idea.title.trim();
+          const shortTitle = extractIdeaSummary(fullTitle); // Extract 3-4 word summary
+          const category = idea.category || 'General';
+          const score = idea.score || 0;
+          // Format: Idea (short), Category, Score
+          return `<li>${shortTitle} · ${category} · Score: ${score}</li>`;
         })
     : [];
 
   const fallback = summary || ideaList.length
     ? ''
-    : '<p>No top ideas available. Need internal ideas sample.</p>';
+    : '<p>No top ideas available. Need chart data from tool_chart.txt.</p>';
 
   return `
     <section class="section">
@@ -930,7 +1095,8 @@ function buildClusterOfWeekSection(text, clusters = []) {
 }
 
 function buildFounderOfWeekSection(text, problems = []) {
-  const summary = text ? formatParagraphs(text) : '';
+  const sanitizedText = text ? hideEmails(text) : '';
+  const summary = sanitizedText ? formatParagraphs(sanitizedText) : '';
   const spotlight = Array.isArray(problems) && problems.length
     ? `<div class="note-card"><p><strong>Problem focus:</strong> ${problems[0].problem || 'Top founder insight'} (${problems[0].count || 0} mentions)</p></div>`
     : '';
@@ -952,26 +1118,29 @@ function buildFounderOfWeekSection(text, problems = []) {
 function buildHighConfidenceSection(text, data = {}) {
   const summary = text ? formatParagraphs(text) : '';
   const funding = Array.isArray(data.funding) ? data.funding : [];
-  const categories = Array.isArray(data.categories) ? data.categories : [];
+  const topCategoryByScore = data.topCategoryByScore || null;
 
-  const hotCategories = categories
-    .filter(cat => (cat.count || 0) >= 10 && (cat.delta || 0) > 0.3)
-    .slice(0, 3)
-    .map(cat => `<li>${cat.name || 'Category'} · ${formatChangePercent(cat.delta || 0)} WoW · ${cat.count || 0} ideas</li>`);
+  // Use top category from tool_chart.txt (by total score)
+  const topCategoryInfo = topCategoryByScore
+    ? `<div class="note-card" style="margin-top: 16px; background: #f8f9fa; padding: 16px; border-radius: 8px;">
+        <strong>Top Category by Score:</strong> ${topCategoryByScore.name || 'Category'} 
+        <span style="color: #666; font-size: 0.9em;">(Total Score: ${topCategoryByScore.totalScore || 0}, Count: ${topCategoryByScore.count || 0})</span>
+      </div>`
+    : '';
 
   const dealHighlights = funding.slice(0, 3).map(deal => `<li>${deal.company || 'Startup'} · ${deal.amount || 'Undisclosed'} · ${deal.category || 'category'}</li>`);
 
-  const fallback = summary || hotCategories.length || dealHighlights.length
+  const fallback = summary || topCategoryInfo || dealHighlights.length
     ? ''
-    : '<p>No high-confidence opportunities identified. Need funding events or fast-growing categories.</p>';
+    : '<p>No high-confidence opportunities identified. Need chart data from tool_chart.txt or funding events.</p>';
 
   return `
     <section class="section">
       <h2><span>🎯</span> HIGH-CONFIDENCE OPPORTUNITIES</h2>
       <div class="note-card">
         ${summary || ''}
-        ${hotCategories.length ? `<ul class="signal-list">${hotCategories.join('')}</ul>` : ''}
-        ${dealHighlights.length ? `<ul class="signal-list">${dealHighlights.join('')}</ul>` : ''}
+        ${topCategoryInfo || ''}
+        ${dealHighlights.length ? `<ul class="signal-list" style="margin-top: 16px;">${dealHighlights.join('')}</ul>` : ''}
         ${fallback}
       </div>
     </section>
@@ -1025,11 +1194,11 @@ function buildMondayPreviewSection(text, trends = []) {
 function getSectionOrderForWeekday(weekday = '') {
   const day = weekday.toLowerCase();
   const orders = {
-    monday: ['idea_futures', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'],
-    tuesday: ['idea_futures', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
+    monday: ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'],
+    tuesday: ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
     wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'],
-    thursday: ['idea_futures', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
-    friday: ['idea_futures', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
+    thursday: ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
+    friday: ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
     default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'one_thing_today']
   };
   return orders[day] || orders.default;
@@ -1338,34 +1507,36 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const redditData = rawData.reddit || [];
   const base44 = internalData.base44 || { totalClicks: 0, topKeywords: [], entries: [] };
   const ideasSample = internalData.ideas || [];
+  const weeklyTopIdeas = internalData.weeklyTopIdeas || []; // Latest 10 unique entries from tool_chart.txt (by email, newest first)
+  const topCategoryByScore = internalData.topCategoryByScore || null; // Top category by total score for HIGH-CONFIDENCE OPPORTUNITIES
   const rawProblemHeatmap = internalData.problemHeatmap || [];
   // Use metadata.totalIdeas if available (all-time count), otherwise calculate from categories
   const totalIdeaCount = internalData.metadata?.totalIdeas || 
     (Array.isArray(categories)
       ? categories.reduce((sum, cat) => sum + (cat.count || 0), 0)
       : 0);
+  const last7DaysIdeaCount = internalData.metadata?.currentWeekCount ?? null;
 
   // Only build sections that have content (weekday-based generation)
   const ideaSection = summaryBlocks.idea_futures ? buildIdeaFuturesSection(await translateBlock(summaryBlocks.idea_futures), categories) : '';
   
   // Clustering section: Only show on Monday (as "ONE MAJOR CLUSTER"), Tuesday (as "TOP 3 NEW CLUSTERS"), or Wednesday (as "DEEP CLUSTERING REPORT")
   // Monday should show clustering, but NOT as "THE CLUSTERING REPORT"
-  // For "all sections" mode, always build if we have content
-  let clusteringSection = '';
-  if (summaryBlocks.clustering) {
-    const shouldShowClustering = includeAllSections || 
-      weekday.toLowerCase() === 'monday' || 
-      weekday.toLowerCase() === 'tuesday' || 
-      weekday.toLowerCase() === 'wednesday';
-    if (shouldShowClustering) {
-      clusteringSection = buildClusteringSection(await translateBlock(summaryBlocks.clustering), clusters, weekday);
-    }
-  }
+  // For "all sections" mode, always build if we have content or clusters data
+  const clusteringSummary = summaryBlocks.clustering ? await translateBlock(summaryBlocks.clustering) : '';
+  const shouldShowClustering = includeAllSections || 
+    weekday.toLowerCase() === 'monday' || 
+    weekday.toLowerCase() === 'tuesday' || 
+    weekday.toLowerCase() === 'wednesday';
+  
+  const clusteringSection = (summaryBlocks.clustering || (includeAllSections && clusters.length > 0))
+    ? buildClusteringSection(clusteringSummary, clusters, includeAllSections ? null : weekday)
+    : '';
   
   const validationSummary = summaryBlocks.validation ? await translateBlock(summaryBlocks.validation) : '';
   const lookbackDays = internalData.metadata?.lookbackDays || 365;
   const validationSection = (summaryBlocks.validation || includeAllSections)
-    ? buildValidationSection(validationSummary, validation, totalIdeaCount, lookbackDays)
+    ? buildValidationSection(validationSummary, validation, totalIdeaCount, lookbackDays, base44, last7DaysIdeaCount)
     : '';
   const dealRadarSummary = summaryBlocks.deal_radar ? await translateBlock(summaryBlocks.deal_radar) : '';
   const dealRadarSection = (summaryBlocks.deal_radar || (includeAllSections && funding.length > 0))
@@ -1384,7 +1555,10 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const tomorrowSection = (summaryBlocks.tomorrows_question || (includeAllSections && trendsData.length))
     ? buildTomorrowQuestionSection(tomorrowSummary, trendsData)
     : '';
-  const oneThingSection = summaryBlocks.one_thing_today ? buildOneThingSection(await translateBlock(summaryBlocks.one_thing_today)) : '';
+  const oneThingSummary = summaryBlocks.one_thing_today ? await translateBlock(summaryBlocks.one_thing_today) : '';
+  const oneThingSection = (summaryBlocks.one_thing_today || (includeAllSections && categories.length > 0))
+    ? buildOneThingSection(oneThingSummary, categories)
+    : '';
   
   // Monday-specific sections
   const weekendSpikesSummary = summaryBlocks.weekend_spikes ? await translateBlock(summaryBlocks.weekend_spikes) : '';
@@ -1469,8 +1643,12 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   
   // Friday-specific sections
   const weeklyTop10Summary = summaryBlocks.weekly_top_10_ideas ? await translateBlock(summaryBlocks.weekly_top_10_ideas) : '';
-  const weeklyTop10Section = (summaryBlocks.weekly_top_10_ideas || (includeAllSections && ideasSample.length))
-    ? buildWeeklyTop10Section(weeklyTop10Summary, ideasSample)
+  // Use weeklyTopIdeas if available (properly ranked), otherwise fallback to ideasSample
+  const top10IdeasToUse = weeklyTopIdeas.length > 0 ? weeklyTopIdeas : ideasSample.slice(0, 10);
+  // Build section if: AI summary exists, OR (it's Friday and we have data), OR (includeAllSections and we have data)
+  const isFriday = weekday.toLowerCase() === 'friday';
+  const weeklyTop10Section = (summaryBlocks.weekly_top_10_ideas || (isFriday && top10IdeasToUse.length) || (includeAllSections && top10IdeasToUse.length))
+    ? buildWeeklyTop10Section(weeklyTop10Summary, top10IdeasToUse)
     : '';
 
   const clusterWeekSummary = summaryBlocks.cluster_of_the_week ? await translateBlock(summaryBlocks.cluster_of_the_week) : '';
@@ -1484,8 +1662,8 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
     : '';
 
   const highConfidenceSummary = summaryBlocks.high_confidence_opportunities ? await translateBlock(summaryBlocks.high_confidence_opportunities) : '';
-  const highConfidenceSection = (summaryBlocks.high_confidence_opportunities || (includeAllSections && (funding.length || categories.length)))
-    ? buildHighConfidenceSection(highConfidenceSummary, { funding, categories })
+  const highConfidenceSection = (summaryBlocks.high_confidence_opportunities || (includeAllSections && (funding.length || topCategoryByScore)))
+    ? buildHighConfidenceSection(highConfidenceSummary, { funding, topCategoryByScore })
     : '';
 
   const weekendChallengeSummary = summaryBlocks.weekend_challenge ? await translateBlock(summaryBlocks.weekend_challenge) : '';

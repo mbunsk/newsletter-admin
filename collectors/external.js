@@ -542,6 +542,109 @@ function extractFundingFromVentureArticles(ventureArticles) {
 }
 
 /**
+ * Extract funding announcements from generic RSS articles
+ * @param {Array} articles - RSS articles
+ * @param {string} sourceLabel - Source identifier
+ * @returns {Array} Array of funding announcements
+ */
+function extractFundingFromRssArticles(articles, sourceLabel = 'rss') {
+  const funding = [];
+  const amountPatterns = [
+    /\$[\d,.]+\s?(?:million|billion|m|b|k)?/i,
+    /[\d,.]+\s?(?:million|billion)\s+(?:round|raise|funding|investment)/i
+  ];
+  const companySplitTokens = [' raises', ' raise', ' lands', ' secures', ' nabs', ' bags', ' scores', ':', ' gets'];
+
+  for (const article of articles) {
+    const title = article.title || '';
+    const rawDescription = (article.description || '').replace(/<[^>]+>/g, ' ');
+    const text = `${title} ${rawDescription}`;
+    const lowerText = text.toLowerCase();
+
+    let amountMatch = null;
+    for (const pattern of amountPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        amountMatch = match[0];
+        break;
+      }
+    }
+
+    if (!amountMatch) {
+      continue;
+    }
+
+    let companyName = title;
+    for (const token of companySplitTokens) {
+      const idx = companyName.toLowerCase().indexOf(token.trim());
+      if (idx > 0) {
+        companyName = companyName.substring(0, idx);
+        break;
+      }
+    }
+    companyName = companyName.trim() || 'Unknown';
+
+    const category = determineCategoryFromText(lowerText);
+
+    funding.push({
+      company: companyName,
+      amount: normalizeFundingAmount(amountMatch),
+      category,
+      date: article.date || new Date().toISOString(),
+      source: sourceLabel,
+      url: article.url,
+      title: article.title
+    });
+  }
+
+  return funding;
+}
+
+function normalizeFundingAmount(rawAmount) {
+  if (!rawAmount) return 'Undisclosed';
+  let amount = rawAmount.trim();
+  if (!amount.startsWith('$')) {
+    amount = `$${amount}`;
+  }
+  amount = amount
+    .replace(/\s+(million)/i, 'M')
+    .replace(/\s+(billion)/i, 'B')
+    .replace(/\s+(thousand)/i, 'K')
+    .replace(/million/i, 'M')
+    .replace(/billion/i, 'B')
+    .replace(/thousand/i, 'K')
+    .replace(/\s+/g, '');
+  return amount;
+}
+
+function determineCategoryFromText(text) {
+  if (!text) return 'general';
+  if (text.includes('artificial intelligence') || text.includes('ai') || text.includes('machine learning')) return 'ai';
+  if (text.includes('saas') || text.includes('software')) return 'vertical saas';
+  if (text.includes('fintech') || text.includes('financial')) return 'fintech';
+  if (text.includes('health') || text.includes('medical')) return 'healthtech';
+  if (text.includes('robotic') || text.includes('hardware')) return 'hardware';
+  return 'general';
+}
+
+function mergeFundingLists(...lists) {
+  const merged = [];
+  const seen = new Set();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    list.forEach(deal => {
+      if (!deal || !deal.company) return;
+      const key = `${deal.company.toLowerCase()}|${deal.amount || ''}|${deal.source || ''}`;
+      if (!seen.has(key)) {
+        merged.push(deal);
+        seen.add(key);
+      }
+    });
+  }
+  return merged;
+}
+
+/**
  * Fetch articles from RSS feeds (VentureBeat and other non-TechCrunch feeds)
  * @returns {Promise<Array>} Array of articles
  */
@@ -567,7 +670,14 @@ async function fetchRSSArticles() {
     
     for (const feedUrl of feeds) {
       try {
-        const items = await fetchRSSFeed(feedUrl, 20);
+        // Add query parameters for TechRanch feed
+        let urlToFetch = feedUrl;
+        if (feedUrl.toLowerCase().includes('techranch')) {
+          const separator = feedUrl.includes('?') ? '&' : '?';
+          urlToFetch = `${feedUrl}${separator}orderby=date&order=DESC`;
+        }
+        
+        const items = await fetchRSSFeed(urlToFetch, 20);
         articles.push(...items.map(item => ({
           title: item.title,
           description: item.description,
@@ -595,28 +705,103 @@ async function fetchRSSArticles() {
 }
 
 /**
+ * Map category names to Google Trends-friendly keywords
+ * @param {string} categoryName - Category name from internal data
+ * @returns {string|null} Google Trends keyword or null if not trackable
+ */
+function mapCategoryToTrendKeyword(categoryName) {
+  if (!categoryName) return null;
+  
+  const normalized = categoryName.toLowerCase().trim();
+  
+  // Direct mappings for common categories
+  const categoryMap = {
+    'saas (software as a service)': 'SaaS',
+    'saas': 'SaaS',
+    'ai': 'artificial intelligence',
+    'edtech': 'edtech',
+    'healthtech': 'healthtech',
+    'e-commerce': 'ecommerce',
+    'ecommerce': 'ecommerce',
+    'fintech': 'fintech',
+    'platforms': 'platform software',
+    'tech': 'technology startup',
+    'consulting': 'business consulting',
+    'manufacturing': 'manufacturing technology',
+    'fashion': 'fashion tech',
+    'energytech': 'energy technology',
+    'brick and mortar': 'retail technology',
+    'services': 'service business'
+  };
+  
+  // Check direct mapping first
+  if (categoryMap[normalized]) {
+    return categoryMap[normalized];
+  }
+  
+  // Check if category name contains key terms
+  if (normalized.includes('tech')) {
+    return normalized.replace(/tech/i, 'tech').trim();
+  }
+  
+  // If category is short and clean, use it directly
+  if (normalized.length <= 20 && /^[a-z\s]+$/.test(normalized)) {
+    return normalized;
+  }
+  
+  return null;
+}
+
+/**
  * Fetch Google Trends data
+ * @param {Array} topCategories - Optional array of top categories from internal data
  * @returns {Promise<Array>} Array of trend data
  */
-async function fetchGoogleTrends() {
+async function fetchGoogleTrends(topCategories = null) {
   try {
     console.log('Fetching Google Trends data...');
     
     // Import google-trends-api
     const googleTrends = (await import('google-trends-api')).default;
     
-    // Get top categories from internal data to track trends
-    // We'll use common startup/tech keywords
-    const keywords = [
+    // Strategic keywords that should always be tracked (important trends)
+    const strategicKeywords = [
       'ai agents',
       'vertical saas',
-      'pet tech',
-      'fintech',
       'SaaS',
-      'startup',
-      'venture capital',
-      'unicorn startup'
+      'startup'
     ];
+    
+    // Build keyword list: strategic + dynamic from categories
+    let keywords = [...strategicKeywords];
+    
+    // Add dynamic keywords from top categories (prioritize high-growth)
+    if (Array.isArray(topCategories) && topCategories.length > 0) {
+      // Sort by growth (delta) and count, prioritize high-growth categories
+      const sortedCategories = [...topCategories]
+        .filter(cat => cat.count >= 10) // Only categories with meaningful volume
+        .sort((a, b) => {
+          // Prioritize high growth, then high count
+          const aScore = (a.delta || 0) * 0.6 + (a.count || 0) * 0.4;
+          const bScore = (b.delta || 0) * 0.6 + (b.count || 0) * 0.4;
+          return bScore - aScore;
+        })
+        .slice(0, 8); // Top 8 categories
+      
+      for (const category of sortedCategories) {
+        const keyword = mapCategoryToTrendKeyword(category.name);
+        if (keyword && !keywords.includes(keyword)) {
+          keywords.push(keyword);
+        }
+      }
+    }
+    
+    // Fallback to static list if no categories provided
+    if (keywords.length === strategicKeywords.length) {
+      keywords.push('pet tech', 'fintech', 'venture capital');
+    }
+    
+    console.log(`Google Trends keywords selected: ${keywords.slice(0, 5).join(', ')} (tracking top 5)`);
     
     const trends = [];
     const today = new Date();
@@ -840,34 +1025,51 @@ export async function collectExternalData(date = null) {
     // Extract funding from TechCrunch Venture feed
     const techcrunchFunding = extractFundingFromVentureArticles(techcrunchData.ventureArticles);
     
+    // Try to load internal data to get top categories for dynamic Google Trends keywords
+    let topCategories = null;
+    try {
+      const internalDataPath = path.join(__dirname, '..', 'data', 'internal', `${today}.json`);
+      const internalData = JSON.parse(await fs.readFile(internalDataPath, 'utf-8'));
+      topCategories = internalData.categories || null;
+      if (topCategories) {
+        console.log(`Loaded ${topCategories.length} categories from internal data for dynamic Google Trends keywords`);
+      }
+    } catch (error) {
+      // Internal data not available yet, will use static keywords
+      console.log('Internal data not available, using static Google Trends keywords');
+    }
+    
     // Fetch from all other sources in parallel
     const [crunchbaseFunding, launches, hackerNews, rssArticles, trends, reddit] = await Promise.all([
       fetchCrunchbaseFunding(),
       fetchProductHuntLaunches(),
       fetchHackerNewsPosts(),
       fetchRSSArticles(),
-      fetchGoogleTrends(),
+      fetchGoogleTrends(topCategories),
       fetchRedditPosts()
     ]);
     
-    // Combine funding sources: prioritize Crunchbase API, fallback to TechCrunch Venture feed
-    let funding = crunchbaseFunding;
-    if (funding.length === 0 || (funding.length === 2 && funding[0].company === 'FactoryOS')) {
-      // If Crunchbase returned placeholders or empty, use TechCrunch Venture feed data
+    // Extract funding from RSS sources (Crunchbase News, TechFundingNews, etc.)
+    const crunchbaseNewsArticles = rssArticles.filter(article => (article.source || '').toLowerCase().includes('crunchbase'));
+    const techFundingNewsArticles = rssArticles.filter(article => (article.source || '').toLowerCase().includes('techfundingnews'));
+    const rssFunding = [
+      ...extractFundingFromRssArticles(crunchbaseNewsArticles, 'crunchbase-news'),
+      ...extractFundingFromRssArticles(techFundingNewsArticles, 'techfundingnews')
+    ];
+
+    // Combine funding sources: prioritize Crunchbase API, but include TechCrunch + RSS extracts
+    const hasRealCrunchbase = crunchbaseFunding.length > 0 && !(crunchbaseFunding.length === 2 && crunchbaseFunding[0].company === 'FactoryOS');
+    let funding;
+    if (hasRealCrunchbase) {
+      funding = mergeFundingLists(crunchbaseFunding, techcrunchFunding, rssFunding);
+    } else if (rssFunding.length) {
+      console.log(`Using ${techcrunchFunding.length} TechCrunch deals plus ${rssFunding.length} RSS funding items`);
+      funding = mergeFundingLists(techcrunchFunding, rssFunding);
+    } else {
       console.log(`Using ${techcrunchFunding.length} funding announcements from TechCrunch Venture feed`);
       funding = techcrunchFunding;
-    } else {
-      // Merge both sources, prioritizing Crunchbase
-      const combinedFunding = [...crunchbaseFunding];
-      // Add TechCrunch funding that doesn't duplicate Crunchbase
-      const crunchbaseCompanies = new Set(crunchbaseFunding.map(f => f.company.toLowerCase()));
-      techcrunchFunding.forEach(f => {
-        if (!crunchbaseCompanies.has(f.company.toLowerCase())) {
-          combinedFunding.push(f);
-        }
-      });
-      funding = combinedFunding;
     }
+    funding = funding.sort((a, b) => new Date(b.date) - new Date(a.date));
     
     // Combine all articles (TechCrunch + other RSS feeds)
     const allArticles = [...techcrunchData.articles, ...rssArticles];

@@ -116,6 +116,8 @@ function parseIdeaLine(line) {
       const ideaMatch = trimmed.match(/startup_idea:\s*([^|]+)/i);
       const targetMatch = trimmed.match(/target_customers:\s*([^|]+)/i);
       const problemMatch = trimmed.match(/problem_to_solve:\s*([^|]+)/i);
+      const websiteNeedMatch = trimmed.match(/website_need\s*:\s*([^|]+)/i);
+      const websiteNeed = websiteNeedMatch ? websiteNeedMatch[1].trim() : '';
       
       idea = {
         email: emailMatch ? emailMatch[1].trim() : '',
@@ -123,6 +125,7 @@ function parseIdeaLine(line) {
         target_customers: targetMatch ? targetMatch[1].trim() : '',
         problem: problemMatch ? problemMatch[1].trim() : null,
         description: ideaMatch ? ideaMatch[1].trim() : '',
+        website_need: websiteNeed,
         raw: trimmed
       };
     } else {
@@ -540,5 +543,33 @@ export async function fetchBase44Clicks(date = null) {
     console.warn(`Error fetching Base44 clicks for ${targetDate}:`, error.message);
     return [];
   }
+}
+
+/**
+ * Fetch Base44 click logs for multiple days
+ * @param {number} days - Number of days to fetch (starting from today, going backwards). Defaults to 7.
+ * @param {string|null} startDate - Optional start date (YYYY-MM-DD). If provided, fetches from this date backwards.
+ * @returns {Promise<Array>} Array of all click entries from the date range
+ */
+export async function fetchBase44ClicksMultiple(days = 7, startDate = null) {
+  const allClicks = [];
+  const baseDate = startDate ? new Date(startDate) : new Date();
+  
+  for (let i = 0; i < days; i++) {
+    const date = new Date(baseDate);
+    date.setDate(date.getDate() - i);
+    const dateStr = getDateString(date);
+    
+    const clicks = await fetchBase44Clicks(dateStr);
+    allClicks.push(...clicks);
+    
+    // Small delay to avoid overwhelming the server
+    if (i < days - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+  
+  console.log(`Fetched ${allClicks.length} total Base44 clicks from ${days} days of logs`);
+  return allClicks;
 }
 

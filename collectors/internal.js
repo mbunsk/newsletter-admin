@@ -10,9 +10,11 @@ import config from '../config.js';
 import { getDateString, getLookbackRange, calculateWoWChange, getDateDaysAgo } from '../utils/dateUtils.js';
 import { 
   fetchOverallLog, 
-  fetchDailyLogs, 
+  fetchDailyLogs,
+  fetchDailyLog,
   fetchChartData,
   fetchBase44Clicks,
+  fetchBase44ClicksMultiple,
   parseLogDate 
 } from '../utils/logParser.js';
 import { fileURLToPath } from 'url';
@@ -646,6 +648,7 @@ function getValidationStats(ideas) {
   let mvpCount = 0;
   let payingCount = 0;
   let launchedCount = 0;
+  let landingNeedCount = 0;
   
   // Check ideas for validation indicators
   ideas.forEach(idea => {
@@ -680,6 +683,19 @@ function getValidationStats(ideas) {
         text.includes('public')) {
       launchedCount++;
     }
+    
+    // Check for landing page / website needs
+    const websiteNeed = (idea.website_need || '').toLowerCase();
+    if (websiteNeed) {
+      if (
+        /need/.test(websiteNeed) ||
+        /yes/.test(websiteNeed) ||
+        websiteNeed.includes('landing page') ||
+        websiteNeed.includes('need a website')
+      ) {
+        landingNeedCount++;
+      }
+    }
   });
   
   const total = ideas.length;
@@ -688,7 +704,8 @@ function getValidationStats(ideas) {
     mvp: total > 0 ? mvpCount / total : 0,
     paying: total > 0 ? payingCount / total : 0,
     mrr: total > 0 ? payingCount / total : 0, // Using paying as proxy for MRR
-    launched: total > 0 ? launchedCount / total : 0
+    launched: total > 0 ? launchedCount / total : 0,
+    landing: total > 0 ? landingNeedCount / total : 0
   };
 }
 
@@ -725,7 +742,7 @@ export async function collectInternalData(date = null) {
       fetchOverallLog(),
       fetchDailyLogs(30), // Fetch last 30 days of daily logs
       fetchChartData(),
-      fetchBase44Clicks(today)
+      fetchBase44ClicksMultiple(7, today) // Fetch last 7 days of Base44 clicks for EXECUTION GAPS
     ]);
     
     // Combine all ideas
@@ -744,7 +761,7 @@ export async function collectInternalData(date = null) {
     
     console.log(`Total unique ideas: ${uniqueIdeas.length}`);
     console.log(`Total chart entries: ${chartEntries.length}`);
-    console.log(`Base44 clicks for ${today}: ${base44ClicksRaw.length}`);
+    console.log(`Base44 clicks (last 7 days): ${base44ClicksRaw.length}`);
     
     // Get date ranges for calculations
     const currentWeekStart = getDateDaysAgo(7);
@@ -763,8 +780,8 @@ export async function collectInternalData(date = null) {
     const previousWeekChartEntries = filterChartEntriesByDate(chartEntries, previousWeekStart, currentWeekStart);
     
     // Filter ideas by date ranges (for fallback/clusters)
-    const currentWeekIdeas = filterIdeasByDateRange(uniqueIdeas, currentWeekStart, now);
-    const previousWeekIdeas = filterIdeasByDateRange(uniqueIdeas, previousWeekStart, currentWeekStart);
+    const currentWeekIdeas = filterIdeasByDateRange(dailyIdeas, currentWeekStart, now);
+    const previousWeekIdeas = filterIdeasByDateRange(dailyIdeas, previousWeekStart, currentWeekStart);
     const lookbackRange = getLookbackRange(config.collection.lookbackDays);
     const lookbackIdeas = filterIdeasByDateRange(uniqueIdeas, lookbackRange.startDate, lookbackRange.endDate);
     
@@ -819,8 +836,11 @@ export async function collectInternalData(date = null) {
     // Other stats from ideas
     // Pass categories and problemHeatmap to getClusters for fallback clustering
     const clusters = getClusters(lookbackIdeas, previousWeekIdeas, categories, problemHeatmap);
-    const validation = getValidationStats(uniqueIdeas);
-    const signalScore = getSignalScoreStats(uniqueIdeas);
+    
+    // For EXECUTION GAPS: use last 7 days of ideas only (matching Base44 clicks timeframe)
+    const last7DaysIdeas = currentWeekIdeas; // currentWeekIdeas is already filtered to last 7 days
+    const validation = getValidationStats(last7DaysIdeas);
+    const signalScore = getSignalScoreStats(last7DaysIdeas);
 
     // Aggregate Base44 click data (top keywords)
     const base44KeywordCounts = {};
@@ -843,6 +863,108 @@ export async function collectInternalData(date = null) {
       entries: base44ClicksRaw
     };
     
+    // Prepare top 10 ideas of the week for Friday section
+    // 1. Filter to last 7 days only
+    // 2. Deduplicate by email+date combination
+    // 3. Remove gibberish/spam/invalid lines
+    // 4. Fetch actual idea data from daily log files using email and date
+    const last7DaysStart = getDateDaysAgo(7);
+    const last7DaysChartEntries = chartEntries.filter(entry => {
+      if (!entry.dateObj) return false;
+      return entry.dateObj >= last7DaysStart && entry.dateObj <= now;
+    });
+    
+    // Deduplicate by email+date combination (to avoid same email on same day)
+    const seenKeys = new Set();
+    const uniqueChartEntries = [];
+    for (const entry of last7DaysChartEntries) {
+      const email = (entry.email || '').trim().toLowerCase();
+      const date = entry.date || '';
+      const key = `${email}|${date}`;
+      
+      // Skip if already seen, empty email, invalid score, or gibberish name
+      if (seenKeys.has(key)) continue;
+      if (!email || email.length < 3) continue;
+      if (!entry.score || entry.score < 1 || entry.score > 100) continue;
+      
+      // Filter out gibberish/spam: very short names, only special chars, etc.
+      const name = (entry.name || '').trim();
+      if (name.length < 2) continue;
+      if (/^[-_=\.]+$/.test(name)) continue; // Only dashes/underscores/dots
+      if (/^[^a-zA-Z0-9\s]+$/.test(name)) continue; // Only special chars
+      
+      seenKeys.add(key);
+      uniqueChartEntries.push(entry);
+    }
+    
+    // Sort by score (descending) and take top 10
+    const topChartEntries = uniqueChartEntries
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 10);
+    
+    // Fetch actual idea data from daily log files using email and date
+    // Use already-fetched dailyIdeas (last 30 days) to find matching ideas
+    // Create a map of email+date -> idea for quick lookup
+    const ideaMap = new Map();
+    for (const idea of dailyIdeas) {
+      const email = (idea.email || '').trim().toLowerCase();
+      const date = idea.date || '';
+      if (email && date) {
+        const key = `${email}|${date}`;
+        // Keep the first matching idea (in case of duplicates)
+        if (!ideaMap.has(key)) {
+          ideaMap.set(key, idea);
+        }
+      }
+    }
+    
+    // Match chart entries with ideas from daily logs
+    const weeklyTopIdeas = [];
+    for (const entry of topChartEntries) {
+      const email = (entry.email || '').trim().toLowerCase();
+      const date = entry.date || '';
+      const key = `${email}|${date}`;
+      
+      const matchingIdea = ideaMap.get(key);
+      
+      if (matchingIdea && matchingIdea.title) {
+        // Clean up title - remove common suffixes like "()"
+        let title = matchingIdea.title.trim();
+        title = title.replace(/\(\)\s*$/, '').trim(); // Remove trailing "()"
+        
+        // Skip if title is too short or invalid after cleaning
+        if (title.length >= 3 && !/^[-_=\.]+$/.test(title)) {
+          weeklyTopIdeas.push({
+            title: title,
+            category: entry.category || 'general',
+            score: entry.score || 0,
+            email: entry.email || '',
+            date: entry.date || ''
+          });
+        }
+      }
+    }
+    
+    // Calculate top category from chart entries for HIGH-CONFIDENCE OPPORTUNITIES
+    const categoryScores = {};
+    currentWeekChartEntries.forEach(entry => {
+      const categories = (entry.category || 'general').split('/').map(c => c.trim());
+      categories.forEach(cat => {
+        if (cat) {
+          if (!categoryScores[cat]) {
+            categoryScores[cat] = { name: cat, totalScore: 0, count: 0 };
+          }
+          categoryScores[cat].totalScore += (entry.score || 0);
+          categoryScores[cat].count += 1;
+        }
+      });
+    });
+    
+    const topCategoryByScore = Object.values(categoryScores)
+      .sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0))[0] || null;
+    
+    // Include sample ideas for AI analysis (limit to 100 to avoid large files)
+    // Also include weekly top 10 ideas separately
     const data = {
       date: today,
       categories,
@@ -852,6 +974,8 @@ export async function collectInternalData(date = null) {
       signalScore,
       base44,
       ideas: uniqueIdeas.slice(0, 100), // Include sample ideas for AI analysis (limit to 100 to avoid large files)
+      weeklyTopIdeas: weeklyTopIdeas, // Top 10 ideas of the week (from tool_chart.txt, sorted by score)
+      topCategoryByScore: topCategoryByScore, // Top category by total score for HIGH-CONFIDENCE OPPORTUNITIES
       metadata: {
         collectedAt: new Date().toISOString(),
         lookbackDays: config.collection.lookbackDays,

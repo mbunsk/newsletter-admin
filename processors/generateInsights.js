@@ -204,6 +204,15 @@ async function prepareDataBlocks(mergedData, targetDate) {
     validation: mergedData.internal.validation || {}
   };
   
+  // Weekly Top 10 Ideas (Friday only)
+  blocks.weekly_top_10_ideas = {
+    ideas: mergedData.internal.weeklyTopIdeas || [],
+    signalScore: mergedData.internal.signalScore || {},
+    categories: mergedData.internal.categories || [],
+    validation: mergedData.internal.validation || {},
+    summary: `Top ${(mergedData.internal.weeklyTopIdeas || []).length} ideas from this week, ranked by signal score`
+  };
+  
   // Add newsletter_day to each block for the AI router
   Object.keys(blocks).forEach(key => {
     if (blocks[key] && typeof blocks[key] === 'object' && !Array.isArray(blocks[key])) {
@@ -298,6 +307,8 @@ export async function generateInsights(date = null) {
               signalScore: mergedData.internal.signalScore,
               base44: mergedData.internal.base44,
               ideas: mergedData.internal.ideas,
+              weeklyTopIdeas: mergedData.internal.weeklyTopIdeas || [], // Latest 10 unique entries from tool_chart.txt
+              topCategoryByScore: mergedData.internal.topCategoryByScore || null, // Top category by total score
               metadata: mergedData.internal.metadata
              },
         categories: mergedData.internal.categories,
