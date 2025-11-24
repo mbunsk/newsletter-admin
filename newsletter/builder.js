@@ -1498,6 +1498,7 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const internalData = rawData.internal || {};
 
   const categories = rawData.categories || internalData.categories || [];
+  const weekendCategories = internalData.weekendCategories || rawData.weekendCategories || [];
   const clusters = internalData.clusters || rawData.clusters || [];
   const validation = internalData.validation || rawData.validation || {};
   const signalScore = internalData.signalScore || rawData.signalScore || {};
@@ -1562,8 +1563,9 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   
   // Monday-specific sections
   const weekendSpikesSummary = summaryBlocks.weekend_spikes ? await translateBlock(summaryBlocks.weekend_spikes) : '';
-  const weekendSpikesSection = (summaryBlocks.weekend_spikes || (includeAllSections && categories.length > 0))
-    ? buildWeekendSpikesSection(weekendSpikesSummary, categories)
+  const weekendCategorySource = weekendCategories.length ? weekendCategories : categories;
+  const weekendSpikesSection = (summaryBlocks.weekend_spikes || (includeAllSections && weekendCategorySource.length > 0))
+    ? buildWeekendSpikesSection(weekendSpikesSummary, weekendCategorySource)
     : '';
 
   const weeklyWatchlistSummary = summaryBlocks.weekly_watchlist ? await translateBlock(summaryBlocks.weekly_watchlist) : '';

@@ -727,6 +727,42 @@ function filterIdeasByDateRange(ideas, startDate, endDate) {
   });
 }
 
+function setStartOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function setEndOfDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function getWeekendRanges(targetDate) {
+  const weekendSunday = new Date(targetDate);
+  weekendSunday.setHours(0, 0, 0, 0);
+  weekendSunday.setDate(weekendSunday.getDate() - 1);
+  while (weekendSunday.getDay() !== 0) {
+    weekendSunday.setDate(weekendSunday.getDate() - 1);
+  }
+
+  const weekendSaturday = new Date(weekendSunday);
+  weekendSaturday.setDate(weekendSaturday.getDate() - 1);
+
+  const previousWeekendSunday = new Date(weekendSunday);
+  previousWeekendSunday.setDate(previousWeekendSunday.getDate() - 7);
+  const previousWeekendSaturday = new Date(previousWeekendSunday);
+  previousWeekendSaturday.setDate(previousWeekendSaturday.getDate() - 1);
+
+  return {
+    weekendStart: setStartOfDay(weekendSaturday),
+    weekendEnd: setEndOfDay(weekendSunday),
+    previousWeekendStart: setStartOfDay(previousWeekendSaturday),
+    previousWeekendEnd: setEndOfDay(previousWeekendSunday)
+  };
+}
+
 /**
  * Main collection function
  * @returns {Promise<Object>} Collected internal data
@@ -784,12 +820,23 @@ export async function collectInternalData(date = null) {
     const previousWeekIdeas = filterIdeasByDateRange(dailyIdeas, previousWeekStart, currentWeekStart);
     const lookbackRange = getLookbackRange(config.collection.lookbackDays);
     const lookbackIdeas = filterIdeasByDateRange(uniqueIdeas, lookbackRange.startDate, lookbackRange.endDate);
+    const todayDateObj = new Date(`${today}T00:00:00Z`);
+    const {
+      weekendStart,
+      weekendEnd,
+      previousWeekendStart,
+      previousWeekendEnd
+    } = getWeekendRanges(todayDateObj);
+    const weekendIdeas = filterIdeasByDateRange(dailyIdeas, weekendStart, weekendEnd);
+    const previousWeekendIdeas = filterIdeasByDateRange(dailyIdeas, previousWeekendStart, previousWeekendEnd);
+    const weekendCategories = getCategoryStats(weekendIdeas, previousWeekendIdeas);
     
     console.log(`Current week chart entries: ${currentWeekChartEntries.length}`);
     console.log(`Previous week chart entries: ${previousWeekChartEntries.length}`);
     console.log(`Current week ideas: ${currentWeekIdeas.length}`);
     console.log(`Previous week ideas: ${previousWeekIdeas.length}`);
     console.log(`Lookback period ideas: ${lookbackIdeas.length}`);
+    console.log(`Weekend ideas (Sat-Sun): ${weekendIdeas.length}`);
     
     // Calculate stats - prioritize chart data for categories (Section 1)
     let categories;
@@ -973,6 +1020,7 @@ export async function collectInternalData(date = null) {
       problemHeatmap,
       signalScore,
       base44,
+      weekendCategories,
       ideas: uniqueIdeas.slice(0, 100), // Include sample ideas for AI analysis (limit to 100 to avoid large files)
       weeklyTopIdeas: weeklyTopIdeas, // Top 10 ideas of the week (from tool_chart.txt, sorted by score)
       topCategoryByScore: topCategoryByScore, // Top category by total score for HIGH-CONFIDENCE OPPORTUNITIES
