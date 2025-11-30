@@ -119,6 +119,7 @@ export function mergeData(internal, external) {
       ideas: internal.ideas || [], // Include ideas for AI analysis
       weeklyTopIdeas: internal.weeklyTopIdeas || [], // Top 10 ideas of the week (from tool_chart.txt, sorted by score)
       topCategoryByScore: internal.topCategoryByScore || null, // Top category by total score
+      adviceData: internal.adviceData || [], // Founder idea feedback (postback advice dataset)
       metadata: internal.metadata || {} // Include metadata for totalIdeas count
     },
     external: {

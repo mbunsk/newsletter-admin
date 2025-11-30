@@ -204,6 +204,12 @@ async function prepareDataBlocks(mergedData, targetDate) {
     validation: mergedData.internal.validation || {}
   };
   
+  // Founder Blind Spots (Every day)
+  blocks.founder_blind_spots = {
+    adviceData: mergedData.internal.adviceData || [],
+    summary: `Founder idea feedback (postback advice dataset) with ${(mergedData.internal.adviceData || []).length} advice entries`
+  };
+  
   // Weekly Top 10 Ideas (Friday only)
   blocks.weekly_top_10_ideas = {
     ideas: mergedData.internal.weeklyTopIdeas || [],
@@ -296,7 +302,9 @@ export async function generateInsights(date = null) {
         founder_of_the_week: insights.founder_of_the_week || '',
         high_confidence_opportunities: insights.high_confidence_opportunities || '',
         weekend_challenge: insights.weekend_challenge || '',
-        monday_preview: insights.monday_preview || ''
+        monday_preview: insights.monday_preview || '',
+        // Every day section
+        founder_blind_spots: insights.founder_blind_spots || ''
       },
            raw_data: {
              internal: {
@@ -309,6 +317,7 @@ export async function generateInsights(date = null) {
               ideas: mergedData.internal.ideas,
               weeklyTopIdeas: mergedData.internal.weeklyTopIdeas || [], // Latest 10 unique entries from tool_chart.txt
               topCategoryByScore: mergedData.internal.topCategoryByScore || null, // Top category by total score
+              adviceData: mergedData.internal.adviceData || [], // Founder idea feedback (postback advice dataset)
               metadata: mergedData.internal.metadata
              },
         categories: mergedData.internal.categories,

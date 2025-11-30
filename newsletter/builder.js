@@ -1115,6 +1115,39 @@ function buildFounderOfWeekSection(text, problems = []) {
   `;
 }
 
+function buildFounderBlindSpotsSection(text, adviceData = []) {
+  const summary = text ? formatParagraphs(text) : '';
+  
+  // Extract top advice patterns from the data
+  const adviceList = Array.isArray(adviceData) && adviceData.length > 0
+    ? adviceData
+        .filter(entry => entry && entry.advice && entry.advice.trim().length > 20)
+        .slice(0, 5) // Show top 5 advice items
+        .map((entry, index) => {
+          const advice = entry.advice.trim();
+          // Truncate very long advice
+          const displayAdvice = advice.length > 200 ? advice.substring(0, 200) + '...' : advice;
+          return `<li style="margin: 8px 0; padding-left: 8px;">${displayAdvice}</li>`;
+        })
+        .join('')
+    : '';
+  
+  const fallback = summary || adviceList
+    ? ''
+    : '<p>No founder blind spots identified. Need advice data from tool_advise_250516.txt.</p>';
+  
+  return `
+    <section class="section">
+      <h2><span>💡</span> FOUNDER BLIND SPOTS</h2>
+      <div class="note-card">
+        ${summary || ''}
+        ${adviceList ? `<ul class="signal-list" style="margin-top: 16px;">${adviceList}</ul>` : ''}
+        ${fallback}
+      </div>
+    </section>
+  `;
+}
+
 function buildHighConfidenceSection(text, data = {}) {
   const summary = text ? formatParagraphs(text) : '';
   const funding = Array.isArray(data.funding) ? data.funding : [];
@@ -1194,12 +1227,12 @@ function buildMondayPreviewSection(text, trends = []) {
 function getSectionOrderForWeekday(weekday = '') {
   const day = weekday.toLowerCase();
   const orders = {
-    monday: ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'],
-    tuesday: ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'],
-    wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'],
-    thursday: ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'],
-    friday: ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'],
-    default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'one_thing_today']
+    monday: ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'founder_blind_spots', 'one_thing_today'],
+    tuesday: ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'founder_blind_spots', 'one_thing_today'],
+    wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'founder_blind_spots', 'tomorrows_question', 'one_thing_today'],
+    thursday: ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'founder_blind_spots', 'one_thing_today', 'tomorrows_question'],
+    friday: ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'founder_blind_spots', 'weekend_challenge', 'monday_preview'],
+    default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'founder_blind_spots', 'one_thing_today']
   };
   return orders[day] || orders.default;
 }
@@ -1234,6 +1267,7 @@ function getAllSectionsMasterOrder() {
     'high_confidence_opportunities',
     'weekend_challenge',
     'monday_preview',
+    'founder_blind_spots',
     'one_thing_today'
   ];
 }
@@ -1364,8 +1398,13 @@ const sectionMetadata = {
   },
   one_thing_today: {
     icon: '🎯',
-    title: 'ONE THING TO DO TODAY',
-    requiredData: 'categories and validation data from internal collector'
+    title: "ONE THING TO DO TODAY",
+    requiredData: 'top trending categories from internal collector'
+  },
+  founder_blind_spots: {
+    icon: '💡',
+    title: 'FOUNDER BLIND SPOTS',
+    requiredData: 'founder idea feedback (postback advice dataset) from tool_advise_250516.txt'
   }
 };
 
@@ -1442,6 +1481,8 @@ function checkSectionHasDataStructure(sectionId, summaryBlocks, rawData, interna
              !!(internalData.categories && internalData.categories.length > 0);
     case 'one_thing_today':
       return !!(internalData.categories && internalData.categories.length > 0);
+    case 'founder_blind_spots':
+      return !!(internalData.adviceData && internalData.adviceData.length > 0);
     default:
       return false;
   }
@@ -1511,6 +1552,7 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const weeklyTopIdeas = internalData.weeklyTopIdeas || []; // Latest 10 unique entries from tool_chart.txt (by email, newest first)
   const topCategoryByScore = internalData.topCategoryByScore || null; // Top category by total score for HIGH-CONFIDENCE OPPORTUNITIES
   const rawProblemHeatmap = internalData.problemHeatmap || [];
+  const adviceData = internalData.adviceData || []; // Founder idea feedback (postback advice dataset)
   // Use metadata.totalIdeas if available (all-time count), otherwise calculate from categories
   const totalIdeaCount = internalData.metadata?.totalIdeas || 
     (Array.isArray(categories)
@@ -1559,6 +1601,12 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const oneThingSummary = summaryBlocks.one_thing_today ? await translateBlock(summaryBlocks.one_thing_today) : '';
   const oneThingSection = (summaryBlocks.one_thing_today || (includeAllSections && categories.length > 0))
     ? buildOneThingSection(oneThingSummary, categories)
+    : '';
+  
+  // Founder Blind Spots section (appears every day)
+  const founderBlindSpotsSummary = summaryBlocks.founder_blind_spots ? await translateBlock(summaryBlocks.founder_blind_spots) : '';
+  const founderBlindSpotsSection = (summaryBlocks.founder_blind_spots || (includeAllSections && adviceData.length > 0))
+    ? buildFounderBlindSpotsSection(founderBlindSpotsSummary, adviceData)
     : '';
   
   // Monday-specific sections
@@ -1703,7 +1751,8 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
     high_confidence_opportunities: highConfidenceSection,
     weekend_challenge: weekendChallengeSection,
     monday_preview: mondayPreviewSection,
-    one_thing_today: oneThingSection
+    one_thing_today: oneThingSection,
+    founder_blind_spots: founderBlindSpotsSection
   };
 
   // Determine section order based on mode

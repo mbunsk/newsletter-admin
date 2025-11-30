@@ -573,3 +573,117 @@ export async function fetchBase44ClicksMultiple(days = 7, startDate = null) {
   return allClicks;
 }
 
+/**
+ * Parse advice line from tool_advise file
+ * Format may vary, but typically contains: date|email|idea|advice
+ * @param {string} line - Line from tool_advise file
+ * @returns {Object|null} Parsed advice entry or null
+ */
+function parseAdviceLine(line) {
+  if (!line || !line.trim()) {
+    return null;
+  }
+  
+  const trimmed = line.trim();
+  
+  // Try pipe-separated format first (most common)
+  if (trimmed.includes('|')) {
+    const parts = trimmed.split('|').map(p => p.trim());
+    if (parts.length >= 3) {
+      return {
+        date: parts[0] || '',
+        email: parts[1] || '',
+        idea: parts[2] || '',
+        advice: parts.slice(3).join('|') || '', // Advice may contain pipes
+        raw: trimmed
+      };
+    }
+  }
+  
+  // Try JSON format
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return {
+        date: parsed.date || '',
+        email: parsed.email || '',
+        idea: parsed.idea || parsed.name || parsed.title || '',
+        advice: parsed.advice || parsed.feedback || parsed.hint || parsed.instruction || '',
+        raw: trimmed
+      };
+    } catch (e) {
+      // Not JSON, continue
+    }
+  }
+  
+  // Try tab-separated
+  if (trimmed.includes('\t')) {
+    const parts = trimmed.split('\t').map(p => p.trim());
+    if (parts.length >= 3) {
+      return {
+        date: parts[0] || '',
+        email: parts[1] || '',
+        idea: parts[2] || '',
+        advice: parts.slice(3).join('\t') || '',
+        raw: trimmed
+      };
+    }
+  }
+  
+  // Fallback: treat entire line as advice if it's substantial
+  if (trimmed.length > 20) {
+    return {
+      date: '',
+      email: '',
+      idea: '',
+      advice: trimmed,
+      raw: trimmed
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Fetch and parse advice data from tool_advise_250516.txt
+ * This file contains AI-generated advice, hints, and instructions given to founders
+ * @returns {Promise<Array>} Array of parsed advice entries
+ */
+export async function fetchAdviceData() {
+  try {
+    const url = 'https://validatorai.com/postback/tool_advise_250516.txt';
+    console.log(`Fetching advice data from ${url}...`);
+    
+    const content = await fetchLogFile(url);
+    if (!content) {
+      return [];
+    }
+    
+    // Parse lines
+    const lines = content.split('\n');
+    const entries = [];
+    const seenEntries = new Set();
+    let duplicateCount = 0;
+    
+    for (const line of lines) {
+      const entry = parseAdviceLine(line);
+      if (entry && entry.advice && entry.advice.trim().length > 10) {
+        // Create a key for deduplication (based on advice content)
+        const adviceKey = entry.advice.substring(0, 100).toLowerCase().trim();
+        if (!seenEntries.has(adviceKey)) {
+          seenEntries.add(adviceKey);
+          entries.push(entry);
+        } else {
+          duplicateCount++;
+        }
+      }
+    }
+    
+    console.log(`Parsed ${entries.length} unique advice entries${duplicateCount > 0 ? ` (deduped ${duplicateCount} duplicates)` : ''}`);
+    return entries;
+  } catch (error) {
+    console.warn('Advice data not available:', error.message);
+    return [];
+  }
+}
+

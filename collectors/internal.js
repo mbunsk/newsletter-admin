@@ -15,6 +15,7 @@ import {
   fetchChartData,
   fetchBase44Clicks,
   fetchBase44ClicksMultiple,
+  fetchAdviceData,
   parseLogDate 
 } from '../utils/logParser.js';
 import { fileURLToPath } from 'url';
@@ -774,11 +775,12 @@ export async function collectInternalData(date = null) {
   try {
     // Fetch log files
     console.log('Fetching log files...');
-    const [overallIdeas, dailyIdeas, chartEntries, base44ClicksRaw] = await Promise.all([
+    const [overallIdeas, dailyIdeas, chartEntries, base44ClicksRaw, adviceData] = await Promise.all([
       fetchOverallLog(),
       fetchDailyLogs(30), // Fetch last 30 days of daily logs
       fetchChartData(),
-      fetchBase44ClicksMultiple(7, today) // Fetch last 7 days of Base44 clicks for EXECUTION GAPS
+      fetchBase44ClicksMultiple(7, today), // Fetch last 7 days of Base44 clicks for EXECUTION GAPS
+      fetchAdviceData() // Fetch AI advice data (founder idea feedback)
     ]);
     
     // Combine all ideas
@@ -1021,6 +1023,7 @@ export async function collectInternalData(date = null) {
       signalScore,
       base44,
       weekendCategories,
+      adviceData: adviceData || [], // AI advice/hints/instructions given to founders (founder idea feedback)
       ideas: uniqueIdeas.slice(0, 100), // Include sample ideas for AI analysis (limit to 100 to avoid large files)
       weeklyTopIdeas: weeklyTopIdeas, // Top 10 ideas of the week (from tool_chart.txt, sorted by score)
       topCategoryByScore: topCategoryByScore, // Top category by total score for HIGH-CONFIDENCE OPPORTUNITIES
@@ -1033,7 +1036,8 @@ export async function collectInternalData(date = null) {
         previousWeekCount: previousWeekIdeas.length,
         currentWeekChartCount: currentWeekChartEntries.length,
         previousWeekChartCount: previousWeekChartEntries.length,
-        base44Clicks: base44ClicksRaw.length
+        base44Clicks: base44ClicksRaw.length,
+        adviceEntries: (adviceData || []).length
       }
     };
     

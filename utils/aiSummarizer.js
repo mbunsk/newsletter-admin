@@ -251,6 +251,13 @@ Write in The Terminal Voice:
 – short paragraphs, high information
 – "zero-bullshit" tone
 
+CRITICAL FORMATTING RULES:
+– Prioritize news and breaking insights over longer paragraphs
+– Make ALL URLs clickable: format as <a href="URL">link text</a> or [link text](URL)
+– Keep sections brief: 2–4 sentences maximum per section unless specifically requested otherwise
+– Use bullet points and lists when presenting multiple data points
+– Lead with the most important insight or news item
+
 Each section must feel like market intelligence, not a summary.
 
 When analyzing data, always answer:
@@ -578,7 +585,30 @@ Prompt:
 Write a 2–3 sentence teaser for what Monday's newsletter will cover.
 Make it curiosity-driven and hint at the key insights coming next week.
 
-25. daily_analysis — Day-of-Week Section Router
+25. founder_blind_spots — Founder Blind Spots (Every day)
+Prompt:
+Generate ONLY content for the founder_blind_spots section. Do NOT include other sections.
+
+Analyze the founder idea feedback (postback advice dataset) from tool_advise_250516.txt.
+This dataset contains actionable insights, hints, and instructions that the AI is giving to every founder.
+
+Identify the most common blind spots, mistakes, or gaps in thinking that founders are making.
+Extract patterns from the advice data:
+– What are the top 3–5 recurring blind spots?
+– What advice is being given most frequently?
+– What are founders consistently missing or misunderstanding?
+– What actionable insights can be shared?
+
+Write 3–4 sentences that:
+– Highlight the most critical blind spots
+– Explain why these are common mistakes
+– Provide actionable guidance based on the AI's feedback patterns
+– Make it feel like insider knowledge that helps founders avoid common pitfalls
+
+Prioritize brevity and actionable insights. Make URLs clickable if any are present in the advice data.
+Focus on patterns that emerge from the advice dataset, not individual pieces of advice.
+
+26. daily_analysis — Day-of-Week Section Router
 Prompt:
 Based on the value of newsletter_day, select the required sections for that day’s edition of The Startup Idea Terminal.
 Only include the sections assigned to that day.
@@ -936,28 +966,28 @@ function getRequiredSectionsForWeekday(weekday) {
   
   if (day === 'monday') {
     // MONDAY — Trendline Monday
-    // Required: Idea Futures Index, Weekend Spikes, This Week's Watchlist, One Major Cluster, Micro-Trends, One Thing To Do Today
-    return ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'one_thing_today'];
+    // Required: Idea Futures Index, Weekend Spikes, This Week's Watchlist, One Major Cluster, Micro-Trends, Founder Blind Spots, One Thing To Do Today
+    return ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'founder_blind_spots', 'one_thing_today'];
   } else if (day === 'tuesday') {
     // TUESDAY — Market Map Tuesday
-    // Required: Idea Futures Index, Top 3 New Clusters, Customer Pain Analysis, Opportunities in the Gaps, Early Market Signals, Dealflow that Matches Clusters, One Thing To Do Today
-    return ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'one_thing_today'];
+    // Required: Idea Futures Index, Top 3 New Clusters, Customer Pain Analysis, Opportunities in the Gaps, Early Market Signals, Dealflow that Matches Clusters, Founder Blind Spots, One Thing To Do Today
+    return ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'founder_blind_spots', 'one_thing_today'];
   } else if (day === 'wednesday') {
     // WEDNESDAY — Pattern Watch Wednesday
-    // Required: Idea Futures Index, Deep Clustering Report, Validation Reality Check, Deal Radar, Wednesday Experiment, Founder Field Note, Tomorrow's Question, One Thing To Do Today
-    return ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'tomorrows_question', 'one_thing_today'];
+    // Required: Idea Futures Index, Deep Clustering Report, Validation Reality Check, Deal Radar, Wednesday Experiment, Founder Field Note, Founder Blind Spots, Tomorrow's Question, One Thing To Do Today
+    return ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'founder_blind_spots', 'tomorrows_question', 'one_thing_today'];
   } else if (day === 'thursday') {
     // THURSDAY — Reality Check Thursday
-    // Required: Idea Futures Index, Why Ideas Fail, Execution Gaps, Monthly Progress Snapshot, Anti-Hype Section, Category Deep Dive, One Thing To Do Today, Tomorrow's Question
-    return ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'one_thing_today', 'tomorrows_question'];
+    // Required: Idea Futures Index, Why Ideas Fail, Execution Gaps, Monthly Progress Snapshot, Anti-Hype Section, Category Deep Dive, Founder Blind Spots, One Thing To Do Today, Tomorrow's Question
+    return ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'founder_blind_spots', 'one_thing_today', 'tomorrows_question'];
   } else if (day === 'friday') {
     // FRIDAY — Cohort Report Friday
-    // Required: Idea Futures Index, Top 10 Ideas of the Week, Cluster-of-the-Week, Founder-of-the-Week, Micro Funding Roundup, High-Confidence Opportunities, The Weekend Challenge, Preview of Monday
-    return ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'weekend_challenge', 'monday_preview'];
+    // Required: Idea Futures Index, Top 10 Ideas of the Week, Cluster-of-the-Week, Founder-of-the-Week, Micro Funding Roundup, High-Confidence Opportunities, Founder Blind Spots, The Weekend Challenge, Preview of Monday
+    return ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'founder_blind_spots', 'weekend_challenge', 'monday_preview'];
   }
   
   // Default: return all common sections
-  return ['idea_futures', 'clustering', 'validation', 'deal_radar', 'one_thing_today'];
+  return ['idea_futures', 'clustering', 'validation', 'deal_radar', 'founder_blind_spots', 'one_thing_today'];
 }
 
 /**
