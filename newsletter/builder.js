@@ -14,6 +14,122 @@ import { translateToEnglish } from '../utils/aiSummarizer.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Normalize amount string for comparison (removes $, normalizes decimals, etc.)
+ * @param {string} amount - Amount string
+ * @returns {string} Normalized amount
+ */
+function normalizeAmountForComparison(amount) {
+  if (!amount) return '';
+  // Convert to string, remove $, normalize decimals (15.0M -> 15M), lowercase
+  return String(amount)
+    .replace(/\$/g, '')
+    .replace(/\.0+([MBK])/g, '$1') // Remove .0 before M/B/K
+    .replace(/\.([1-9]+)0+([MBK])/g, '.$1$2') // Remove trailing zeros after decimal
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Extract deals from previous newsletters to avoid duplicates
+ * @param {string} currentDate - Current date string (YYYY-MM-DD)
+ * @returns {Promise<Array<{company: string, amount: string}>>} Array of previously shown deals
+ */
+async function getPreviousDeals(currentDate) {
+  const outputDir = path.join(__dirname, '..', config.paths.output);
+  const previousDeals = [];
+  
+  try {
+    // Get all HTML files in output directory
+    const files = await fs.readdir(outputDir);
+    const htmlFiles = files.filter(f => f.endsWith('.html') && f !== `${currentDate}-a.html` && f !== `${currentDate}-b.html`);
+    
+    // Sort files by date (newest first) and limit to last 7 days
+    const sortedFiles = htmlFiles
+      .map(f => {
+        const match = f.match(/^(\d{4}-\d{2}-\d{2})/);
+        return match ? { file: f, date: match[1] } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 14); // Check last 14 files (about 7 days if generating 2 per day)
+    
+    for (const { file } of sortedFiles) {
+      try {
+        const filePath = path.join(outputDir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        
+        // Extract deal cards using regex
+        // Pattern: <h3>🔹 Company Name <span>$Amount</span></h3>
+        const dealRegex = /<h3>🔹\s*([^<]+?)\s*<span>([^<]+?)<\/span><\/h3>/g;
+        let match;
+        
+        while ((match = dealRegex.exec(content)) !== null) {
+          const company = match[1].trim();
+          const amount = match[2].trim();
+          
+          // Normalize company name and amount for comparison
+          const normalizedCompany = company.toLowerCase().trim();
+          // Store the raw amount from HTML (already formatted like "$15M")
+          // We'll normalize it during comparison
+          const normalizedAmount = amount.trim();
+          
+          // Check if we already have this deal
+          const exists = previousDeals.some(d => 
+            d.company === normalizedCompany && 
+            normalizeAmountForComparison(d.amount) === normalizeAmountForComparison(normalizedAmount)
+          );
+          
+          if (!exists) {
+            previousDeals.push({ company: normalizedCompany, amount: normalizedAmount });
+          }
+        }
+      } catch (error) {
+        // Skip files that can't be read
+        console.warn(`Could not read ${file} to extract deals:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.warn(`Could not read output directory to check previous deals:`, error.message);
+  }
+  
+  return previousDeals;
+}
+
+/**
+ * Filter out deals that were already shown in previous newsletters
+ * @param {Array} funding - Array of funding deals
+ * @param {Array} previousDeals - Array of previously shown deals
+ * @returns {Array} Filtered funding array
+ */
+function filterDuplicateDeals(funding, previousDeals) {
+  if (!Array.isArray(funding) || funding.length === 0) {
+    return funding;
+  }
+  
+  if (!Array.isArray(previousDeals) || previousDeals.length === 0) {
+    return funding;
+  }
+  
+  return funding.filter(deal => {
+    if (!deal.company || !deal.amount) {
+      return true; // Keep deals without company/amount (shouldn't happen, but be safe)
+    }
+    
+    const normalizedCompany = deal.company.toLowerCase().trim();
+    const formattedAmount = formatAmount(deal.amount);
+    const normalizedAmount = normalizeAmountForComparison(formattedAmount);
+    
+    // Check if this deal was shown before
+    const wasShown = previousDeals.some(prev => 
+      prev.company === normalizedCompany && 
+      normalizeAmountForComparison(prev.amount) === normalizedAmount
+    );
+    
+    return !wasShown;
+  });
+}
+
 function formatLongDate(dateStr) {
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) {
@@ -1582,8 +1698,25 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
     ? buildValidationSection(validationSummary, validation, totalIdeaCount, lookbackDays, base44, last7DaysIdeaCount)
     : '';
   const dealRadarSummary = summaryBlocks.deal_radar ? await translateBlock(summaryBlocks.deal_radar) : '';
-  const dealRadarSection = (summaryBlocks.deal_radar || (includeAllSections && funding.length > 0))
-    ? buildDealRadarSection(dealRadarSummary, funding)
+  
+  // Filter out deals that were already shown in previous newsletters
+  let filteredFunding = funding;
+  if (funding.length > 0) {
+    try {
+      const previousDeals = await getPreviousDeals(date);
+      filteredFunding = filterDuplicateDeals(funding, previousDeals);
+      
+      if (filteredFunding.length < funding.length) {
+        console.log(`Filtered out ${funding.length - filteredFunding.length} duplicate deal(s) from previous newsletters`);
+      }
+    } catch (error) {
+      console.warn('Error filtering duplicate deals, using original funding list:', error.message);
+      filteredFunding = funding;
+    }
+  }
+  
+  const dealRadarSection = (summaryBlocks.deal_radar || (includeAllSections && filteredFunding.length > 0))
+    ? buildDealRadarSection(dealRadarSummary, filteredFunding)
     : '';
   const experimentSummary = summaryBlocks.wednesday_experiment ? await translateBlock(summaryBlocks.wednesday_experiment) : '';
   const wednesdayData = { totalIdeas: totalIdeaCount, validation };
