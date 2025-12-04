@@ -645,14 +645,28 @@ function parseAdviceLine(line) {
 }
 
 /**
- * Fetch and parse advice data from tool_advise_250516.txt
- * This file contains AI-generated advice, hints, and instructions given to founders
+ * Get advice filename for a specific date
+ * Format: tool_advise_{YYMMDD}.txt
+ * @param {Date} date - Date object (defaults to today)
+ * @returns {string} Advice filename
+ */
+export function getAdviceFilename(date = new Date()) {
+  const year = String(date.getFullYear()).substring(2);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `tool_advise_${year}${month}${day}.txt`;
+}
+
+/**
+ * Fetch and parse advice data from a single date file
+ * @param {Date|string} date - Date object or date string (YYYY-MM-DD)
  * @returns {Promise<Array>} Array of parsed advice entries
  */
-export async function fetchAdviceData() {
+async function fetchAdviceDataForDate(date) {
   try {
-    const url = 'https://validatorai.com/postback/tool_advise_250516.txt';
-    console.log(`Fetching advice data from ${url}...`);
+    const dateObj = date instanceof Date ? date : new Date(date + 'T00:00:00');
+    const filename = getAdviceFilename(dateObj);
+    const url = `https://validatorai.com/postback/${filename}`;
     
     const content = await fetchLogFile(url);
     if (!content) {
@@ -662,25 +676,71 @@ export async function fetchAdviceData() {
     // Parse lines
     const lines = content.split('\n');
     const entries = [];
-    const seenEntries = new Set();
-    let duplicateCount = 0;
     
     for (const line of lines) {
       const entry = parseAdviceLine(line);
       if (entry && entry.advice && entry.advice.trim().length > 10) {
-        // Create a key for deduplication (based on advice content)
-        const adviceKey = entry.advice.substring(0, 100).toLowerCase().trim();
-        if (!seenEntries.has(adviceKey)) {
-          seenEntries.add(adviceKey);
-          entries.push(entry);
-        } else {
-          duplicateCount++;
-        }
+        entries.push(entry);
       }
     }
     
-    console.log(`Parsed ${entries.length} unique advice entries${duplicateCount > 0 ? ` (deduped ${duplicateCount} duplicates)` : ''}`);
     return entries;
+  } catch (error) {
+    // Silently fail for individual dates (file might not exist)
+    return [];
+  }
+}
+
+/**
+ * Fetch and parse advice data from the last N days
+ * This function fetches advice data from tool_advise_{YYMMDD}.txt files
+ * @param {number} days - Number of days to fetch (defaults to 7)
+ * @param {string|null} startDate - Start date string (YYYY-MM-DD), defaults to today
+ * @returns {Promise<Array>} Array of parsed advice entries (deduplicated)
+ */
+export async function fetchAdviceData(days = 7, startDate = null) {
+  try {
+    const allEntries = [];
+    const baseDate = startDate ? new Date(startDate + 'T00:00:00') : new Date();
+    const seenEntries = new Set();
+    let totalFetched = 0;
+    let duplicateCount = 0;
+    let filesFound = 0;
+    
+    console.log(`Fetching advice data from last ${days} days...`);
+    
+    for (let i = 0; i < days; i++) {
+      const date = new Date(baseDate);
+      date.setDate(date.getDate() - i);
+      const dateStr = getDateString(date);
+      const filename = getAdviceFilename(date);
+      
+      const entries = await fetchAdviceDataForDate(date);
+      
+      if (entries.length > 0) {
+        filesFound++;
+        totalFetched += entries.length;
+        
+        // Deduplicate based on advice content
+        for (const entry of entries) {
+          const adviceKey = entry.advice.substring(0, 100).toLowerCase().trim();
+          if (!seenEntries.has(adviceKey)) {
+            seenEntries.add(adviceKey);
+            allEntries.push(entry);
+          } else {
+            duplicateCount++;
+          }
+        }
+      }
+      
+      // Small delay to avoid overwhelming the server
+      if (i < days - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    console.log(`Fetched ${allEntries.length} unique advice entries from ${filesFound} files (${totalFetched} total entries, ${duplicateCount} duplicates removed)`);
+    return allEntries;
   } catch (error) {
     console.warn('Advice data not available:', error.message);
     return [];
