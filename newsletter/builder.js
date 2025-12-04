@@ -164,6 +164,199 @@ function hideEmails(text) {
   return text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email hidden]');
 }
 
+/**
+ * Escape HTML characters to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeHtml(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Fix broken HTML links by ensuring all <a> tags are properly closed
+ * @param {string} text - Text that may contain broken HTML links
+ * @returns {string} Text with fixed links
+ */
+function fixBrokenHtmlLinks(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  
+  // Use a stack to track open tags and close them properly
+  let result = '';
+  let i = 0;
+  const openTagStack = [];
+  
+  while (i < text.length) {
+    // Check for opening <a> tag
+    if (text.substring(i).startsWith('<a')) {
+      const tagEnd = text.indexOf('>', i);
+      if (tagEnd !== -1) {
+        const fullTag = text.substring(i, tagEnd + 1);
+        result += fullTag;
+        openTagStack.push('a');
+        i = tagEnd + 1;
+        continue;
+      }
+    }
+    
+    // Check for closing </a> tag
+    if (text.substring(i).startsWith('</a>')) {
+      if (openTagStack.length > 0 && openTagStack[openTagStack.length - 1] === 'a') {
+        result += '</a>';
+        openTagStack.pop();
+        i += 4;
+        continue;
+      }
+      // Extra closing tag, skip it
+      i += 4;
+      continue;
+    }
+    
+    result += text[i];
+    i++;
+  }
+  
+  // Close any remaining open tags
+  while (openTagStack.length > 0) {
+    const tag = openTagStack.pop();
+    if (tag === 'a') {
+      result += '</a>';
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Sanitize advice HTML - fix broken links and ensure proper escaping
+ * This is more aggressive than escapeHtmlPreservingLinks to prevent cross-item contamination
+ * @param {string} text - Text that may contain HTML links
+ * @returns {string} Sanitized text with properly formatted links preserved
+ */
+function sanitizeAdviceHtml(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  
+  // Step 1: First, close any broken/unclosed <a> tags
+  // Find all opening <a> tags and ensure each has a closing tag
+  let result = '';
+  let i = 0;
+  const openTagPositions = [];
+  
+  while (i < text.length) {
+    // Check for opening <a> tag
+    if (text.substring(i).match(/^<a\s/i)) {
+      const tagEnd = text.indexOf('>', i);
+      if (tagEnd !== -1) {
+        const fullTag = text.substring(i, tagEnd + 1);
+        openTagPositions.push({ start: result.length, tag: fullTag });
+        result += fullTag;
+        i = tagEnd + 1;
+        continue;
+      }
+    }
+    
+    // Check for closing </a> tag
+    if (text.substring(i).startsWith('</a>')) {
+      // If we have open tags, this closes the most recent one
+      if (openTagPositions.length > 0) {
+        openTagPositions.pop();
+      }
+      result += '</a>';
+      i += 4;
+      continue;
+    }
+    
+    result += text[i];
+    i++;
+  }
+  
+  // Close any remaining unclosed tags
+  while (openTagPositions.length > 0) {
+    result += '</a>';
+    openTagPositions.pop();
+  }
+  
+  text = result;
+  
+  // Step 2: Extract all properly formatted links (now they should all be closed)
+  const linkRegex = /<a\s+[^>]*>.*?<\/a>/gi;
+  const links = [];
+  let linkIndex = 0;
+  const placeholders = [];
+  
+  // Replace properly formatted links with placeholders
+  text = text.replace(linkRegex, (match) => {
+    const placeholder = `__LINK_PLACEHOLDER_${linkIndex}__`;
+    links.push(match);
+    placeholders.push(placeholder);
+    linkIndex++;
+    return placeholder;
+  });
+  
+  // Step 3: Escape all remaining HTML
+  text = escapeHtml(text);
+  
+  // Step 4: Restore the properly formatted links
+  links.forEach((link, index) => {
+    text = text.replace(placeholders[index], link);
+  });
+  
+  return text;
+}
+
+/**
+ * Escape HTML but preserve properly formatted links
+ * @param {string} text - Text that may contain HTML links
+ * @returns {string} Escaped text with links preserved
+ */
+function escapeHtmlPreservingLinks(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  
+  // First, fix broken links by closing any unclosed <a> tags
+  text = fixBrokenHtmlLinks(text);
+  
+  // Extract all properly formatted links (must have both opening and closing tags)
+  const linkRegex = /<a\s+[^>]*>.*?<\/a>/gi;
+  const links = [];
+  let linkIndex = 0;
+  const placeholders = [];
+  
+  // Replace links with placeholders
+  text = text.replace(linkRegex, (match) => {
+    const placeholder = `__LINK_PLACEHOLDER_${linkIndex}__`;
+    links.push(match);
+    placeholders.push(placeholder);
+    linkIndex++;
+    return placeholder;
+  });
+  
+  // Escape all remaining HTML
+  text = escapeHtml(text);
+  
+  // Restore the links (they're already properly formatted, so don't escape them)
+  links.forEach((link, index) => {
+    text = text.replace(placeholders[index], link);
+  });
+  
+  return text;
+}
+
 function formatPercent(value, digits = 1) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return '0%';
@@ -894,7 +1087,7 @@ function buildWhyIdeasFailSection(text, data = {}) {
   `;
 }
 
-function buildExecutionGapsSection(text, data = {}) {
+async function buildExecutionGapsSection(text, data = {}) {
   const summary = text ? formatParagraphs(text) : '';
   const validation = data.validation || {};
   const base44 = data.base44 || {};
@@ -926,8 +1119,18 @@ function buildExecutionGapsSection(text, data = {}) {
     </div>
   `;
 
+  // Translate keywords if they're non-English
   const keywordList = Array.isArray(base44.topKeywords)
-    ? base44.topKeywords.slice(0, 3).map(item => `<li><span class="keyword-icon">🔍</span> ${item.keyword || 'Unknown'} <span class="click-count">· ${item.count || 0} clicks</span></li>`)
+    ? await Promise.all(
+        base44.topKeywords.slice(0, 3).map(async (item) => {
+          const keyword = item.keyword || 'Unknown';
+          // Translate if non-English
+          const translatedKeyword = await translateBlock(keyword);
+          // Escape HTML to prevent XSS and broken tags
+          const escapedKeyword = escapeHtml(translatedKeyword);
+          return `<li><span class="keyword-icon">🔍</span> ${escapedKeyword} <span class="click-count">· ${item.count || 0} clicks</span></li>`;
+        })
+      )
     : [];
 
   const ruleSummary = signalScore.rules
@@ -1231,34 +1434,29 @@ function buildFounderOfWeekSection(text, problems = []) {
   `;
 }
 
-function buildFounderBlindSpotsSection(text, adviceData = []) {
-  const summary = text ? formatParagraphs(text) : '';
+async function buildFounderBlindSpotsSection(text, adviceData = []) {
+  // Check if summary is just a fallback message - if so, hide it if we have advice data
+  const isFallbackMessage = text && (
+    text.includes('Data available for') && 
+    text.includes('AI summarization not configured')
+  );
   
-  // Extract top advice patterns from the data
-  const adviceList = Array.isArray(adviceData) && adviceData.length > 0
-    ? adviceData
-        .filter(entry => entry && entry.advice && entry.advice.trim().length > 20)
-        .slice(0, 5) // Show top 5 advice items
-        .map((entry, index) => {
-          const advice = entry.advice.trim();
-          // Truncate very long advice
-          const displayAdvice = advice.length > 200 ? advice.substring(0, 200) + '...' : advice;
-          return `<li style="margin: 8px 0; padding-left: 8px;">${displayAdvice}</li>`;
-        })
-        .join('')
-    : '';
+  const summary = (text && !isFallbackMessage) ? formatParagraphs(text) : '';
   
-  const fallback = summary || adviceList
+  // Note: We do NOT show raw advice snippets here. The AI-generated summary should contain
+  // the insights about founder blind spots (overconfidence, lack of self-awareness, 
+  // failure to adapt, etc.) based on patterns in the advice data.
+  // The adviceData is only used by the AI to generate the summary, not displayed directly.
+  
+  const fallback = summary
     ? ''
-    : '<p>No founder blind spots identified. Need advice data from tool_advise_250516.txt.</p>';
+    : '<p>No founder blind spots identified. The AI needs to analyze the advice dataset to identify patterns revealing founder blind spots (overconfidence, lack of self-awareness, failure to adapt, etc.).</p>';
   
   return `
     <section class="section">
       <h2><span>💡</span> FOUNDER BLIND SPOTS</h2>
       <div class="note-card">
-        ${summary || ''}
-        ${adviceList ? `<ul class="signal-list" style="margin-top: 16px;">${adviceList}</ul>` : ''}
-        ${fallback}
+        ${summary || fallback}
       </div>
     </section>
   `;
@@ -1739,7 +1937,7 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   // Founder Blind Spots section (appears every day)
   const founderBlindSpotsSummary = summaryBlocks.founder_blind_spots ? await translateBlock(summaryBlocks.founder_blind_spots) : '';
   const founderBlindSpotsSection = (summaryBlocks.founder_blind_spots || (includeAllSections && adviceData.length > 0))
-    ? buildFounderBlindSpotsSection(founderBlindSpotsSummary, adviceData)
+    ? await buildFounderBlindSpotsSection(founderBlindSpotsSummary, adviceData)
     : '';
   
   // Monday-specific sections
@@ -1806,7 +2004,7 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
 
   const executionGapsSummary = summaryBlocks.execution_gaps ? await translateBlock(summaryBlocks.execution_gaps) : '';
   const executionGapsSection = (summaryBlocks.execution_gaps || (includeAllSections && (validation.mvp !== undefined || base44.totalClicks)))
-    ? buildExecutionGapsSection(executionGapsSummary, { validation, base44, signalScore })
+    ? await buildExecutionGapsSection(executionGapsSummary, { validation, base44, signalScore })
     : '';
 
   const monthlyProgressSummary = summaryBlocks.monthly_progress ? await translateBlock(summaryBlocks.monthly_progress) : '';

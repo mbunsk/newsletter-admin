@@ -205,9 +205,16 @@ async function prepareDataBlocks(mergedData, targetDate) {
   };
   
   // Founder Blind Spots (Every day)
+  // Limit advice data to avoid token limits - sample the most recent/relevant entries
+  const allAdviceData = mergedData.internal.adviceData || [];
+  // Take a representative sample: first 100 entries for pattern analysis
+  // The AI should analyze patterns, not every single entry
+  const sampledAdviceData = allAdviceData.slice(0, 100);
+  
   blocks.founder_blind_spots = {
-    adviceData: mergedData.internal.adviceData || [],
-    summary: `Founder idea feedback (postback advice dataset) with ${(mergedData.internal.adviceData || []).length} advice entries`
+    adviceData: sampledAdviceData,
+    totalAdviceCount: allAdviceData.length,
+    summary: `Founder idea feedback (postback advice dataset) with ${allAdviceData.length} total advice entries (analyzing ${sampledAdviceData.length} sample entries for patterns)`
   };
   
   // Weekly Top 10 Ideas (Friday only)

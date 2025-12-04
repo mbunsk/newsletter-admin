@@ -589,24 +589,32 @@ Make it curiosity-driven and hint at the key insights coming next week.
 Prompt:
 Generate ONLY content for the founder_blind_spots section. Do NOT include other sections.
 
-Analyze the founder idea feedback (postback advice dataset) from tool_advise_250516.txt.
-This dataset contains actionable insights, hints, and instructions that the AI is giving to every founder.
+Founder blind spots are unrecognized weaknesses, threats, or oversights that are often obvious to others but not the founder. They can be behavioral (lack of listening, defensive reactions) or strategic (ignoring market shifts, overconfidence, failure to adapt). These blind spots can hinder success by creating problems in culture, strategy, and execution.
 
-Identify the most common blind spots, mistakes, or gaps in thinking that founders are making.
-Extract patterns from the advice data:
-– What are the top 3–5 recurring blind spots?
-– What advice is being given most frequently?
-– What are founders consistently missing or misunderstanding?
-– What actionable insights can be shared?
+You must analyze the internal postback advice dataset daily from tool_advise_{YYMMDD}.txt files (last 7 days) to identify patterns that reveal founder blind spots.
+
+Look for evidence of:
+– Overconfidence/Ego: Founders overestimating clarity, dismissing flaws in plans
+– Lack of self-awareness: Not realizing condescending tone, interrupting habits, defensive reactions
+– Selective listening: Claiming "open door policy" while shutting down ideas that aren't their own
+– Failure to adapt: Missing signals about changing market conditions, technological dead ends, or customer needs
+– Poor communication: Under-communicating strategic direction and priorities
+– Lack of operational understanding: Remaining in silos, not understanding different parts of the business
+– UVP blind spots: Misunderstanding their unique value proposition
+– Flawed competitor assumptions: Misreading the competitive landscape
+– Customer-targeting mistakes: Not understanding who their real customers are
+
+Analyze the advice patterns to identify what blind spots founders are consistently showing. What advice is being given most frequently? What are founders consistently missing or misunderstanding? What patterns indicate overconfidence, lack of awareness, or failure to adapt?
 
 Write 3–4 sentences that:
-– Highlight the most critical blind spots
-– Explain why these are common mistakes
-– Provide actionable guidance based on the AI's feedback patterns
-– Make it feel like insider knowledge that helps founders avoid common pitfalls
+– Identify the most critical blind spots revealed by the advice patterns (e.g., "Founders are consistently overestimating their market clarity...")
+– Explain why these blind spots are dangerous (they create distorted reality, compound over time, stall careers and businesses)
+– Provide actionable guidance to help founders recognize and address these blind spots
+– Make it feel like insider knowledge that helps founders see what they're missing
 
+Focus on patterns that emerge from the advice dataset, not individual pieces of advice or raw advice snippets.
 Prioritize brevity and actionable insights. Make URLs clickable if any are present in the advice data.
-Focus on patterns that emerge from the advice dataset, not individual pieces of advice.
+This is a required section every day.
 
 26. daily_analysis — Day-of-Week Section Router
 Prompt:
@@ -856,7 +864,35 @@ async function generateFallbackInsight(data, section) {
     if (section === 'one_thing_today') {
       const topCategory = data.categories && data.categories[0];
       const categoryName = topCategory ? topCategory.name : 'your niche';
-      return `Open a sheet and list 50 ${categoryName} operators who feel the pain you’re solving. No paid ads — just people you can DM today.`;
+      return `Open a sheet and list 50 ${categoryName} operators who feel the pain you're solving. No paid ads — just people you can DM today.`;
+    }
+    if (section === 'founder_blind_spots' && data.adviceData) {
+      const adviceCount = Array.isArray(data.adviceData) ? data.adviceData.length : 0;
+      if (adviceCount > 0) {
+        // Analyze patterns in advice data to identify blind spots
+        const commonPatterns = [];
+        const adviceTexts = data.adviceData.slice(0, 20).map(entry => entry.advice || '').join(' ').toLowerCase();
+        
+        // Look for evidence of blind spots in the advice patterns
+        if (adviceTexts.includes('uvp') || adviceTexts.includes('value proposition')) {
+          commonPatterns.push('UVP clarity');
+        }
+        if (adviceTexts.includes('competitor') || adviceTexts.includes('competition')) {
+          commonPatterns.push('competitor assumptions');
+        }
+        if (adviceTexts.includes('customer') || adviceTexts.includes('target')) {
+          commonPatterns.push('customer targeting');
+        }
+        if (adviceTexts.includes('messaging') || adviceTexts.includes('communication')) {
+          commonPatterns.push('messaging gaps');
+        }
+        
+        if (commonPatterns.length > 0) {
+          return `Founders are consistently showing blind spots around ${commonPatterns.join(', ')}. The advice patterns from ${adviceCount} entries reveal recurring misconceptions that founders aren't recognizing—these blind spots compound over time and can stall execution if left unaddressed.`;
+        }
+        return `Analyzing ${adviceCount} advice entries reveals patterns of founder blind spots—unrecognized weaknesses that are obvious to others but not the founder. These can be behavioral (lack of listening, defensive reactions) or strategic (ignoring market shifts, overconfidence, failure to adapt).`;
+      }
+      return `Founder blind spots analysis requires advice data from the postback dataset (tool_advise_{YYMMDD}.txt files). This data reveals patterns of unrecognized weaknesses, threats, or oversights that founders consistently miss.`;
     }
   } catch (error) {
     console.warn(`Error generating fallback insight for ${section}:`, error.message);
