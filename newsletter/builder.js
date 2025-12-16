@@ -157,6 +157,92 @@ function formatParagraphs(text) {
   return parts.map(part => `<p>${part}</p>`).join('');
 }
 
+/**
+ * Format text as bullet points
+ * Handles various bullet formats: •, -, *, etc.
+ * Also attempts to convert paragraphs to bullets if no bullets detected
+ * @param {string} text - Text with bullet points or paragraphs
+ * @returns {string} HTML formatted bullet list
+ */
+function formatBulletPoints(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  
+  // Split by lines and filter empty
+  const lines = text
+    .split(/\r?\n+/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  
+  if (lines.length === 0) {
+    return '';
+  }
+  
+  const bullets = [];
+  let hasBulletMarkers = false;
+  
+  for (const line of lines) {
+    // Check if line starts with bullet markers: •, -, *, or numbered (1., 2., etc.)
+    const bulletMatch = line.match(/^([•\-\*]|\d+\.)\s+(.+)/);
+    
+    if (bulletMatch) {
+      hasBulletMarkers = true;
+      const bulletText = bulletMatch[2].trim();
+      if (bulletText) {
+        bullets.push(`<li>${bulletText}</li>`);
+      }
+    } else {
+      // If no bullet marker but we've seen bullets before, this might be continuation
+      // Or if this is a single line without bullets, check if it's a paragraph that should be converted
+      if (hasBulletMarkers && line.length > 0) {
+        // Continuation of previous bullet
+        bullets.push(`<li>${line}</li>`);
+      }
+    }
+  }
+  
+  // If we found bullet markers, return formatted list
+  if (hasBulletMarkers && bullets.length > 0) {
+    return `<ul class="signal-list" style="margin-top: 8px;">${bullets.join('')}</ul>`;
+  }
+  
+  // If no bullets found but we have multiple lines, try to convert to bullets
+  // This handles cases where AI outputs paragraphs instead of bullets
+  if (lines.length > 1) {
+    // Try to split by sentence boundaries or common patterns
+    const convertedBullets = lines.map(line => {
+      // Remove trailing periods if they're just formatting
+      const cleaned = line.replace(/^[•\-\*]\s*/, '').trim();
+      if (cleaned) {
+        return `<li>${cleaned}</li>`;
+      }
+      return null;
+    }).filter(Boolean);
+    
+    if (convertedBullets.length > 0) {
+      return `<ul class="signal-list" style="margin-top: 8px;">${convertedBullets.join('')}</ul>`;
+    }
+  }
+  
+  // If single paragraph, check if it contains multiple ideas that can be split
+  if (lines.length === 1) {
+    const singleLine = lines[0];
+    // Check for patterns like "X, Y, and Z" or semicolons that indicate multiple points
+    if (singleLine.includes(';') || singleLine.match(/,\s+and\s+/i) || singleLine.match(/\.\s+[A-Z]/)) {
+      // Try to split by semicolons or sentence boundaries
+      const parts = singleLine.split(/[;]|\.\s+(?=[A-Z])/).map(p => p.trim()).filter(p => p.length > 20);
+      if (parts.length >= 3) {
+        const convertedBullets = parts.map(part => `<li>${part}</li>`);
+        return `<ul class="signal-list" style="margin-top: 8px;">${convertedBullets.join('')}</ul>`;
+      }
+    }
+  }
+  
+  // Fallback: treat as paragraphs
+  return formatParagraphs(text);
+}
+
 function hideEmails(text) {
   if (!text || typeof text !== 'string') {
     return text;
@@ -1462,6 +1548,57 @@ async function buildFounderBlindSpotsSection(text, adviceData = []) {
   `;
 }
 
+function buildFounderWinsSection(text, ideaGeneratorData = []) {
+  // Format as bullet points (5-7 bullets expected)
+  const summary = text ? formatBulletPoints(text) : '';
+  const fallback = summary
+    ? ''
+    : '<p>No founder wins identified this week. The AI needs to analyze the Idea Generator dataset to identify what founders are doing right—clearer customer definitions, stronger founder advantages, well-structured problems, and increased industry alignment.</p>';
+  
+  return `
+    <section class="section">
+      <h2><span>✅</span> FOUNDER WINS</h2>
+      <div class="note-card">
+        ${summary || fallback}
+      </div>
+    </section>
+  `;
+}
+
+function buildTopInputsSection(text, ideaGeneratorData = []) {
+  // Format as bullet points (5 bullets expected)
+  const summary = text ? formatBulletPoints(text) : '';
+  const fallback = summary
+    ? ''
+    : '<p>No top inputs identified this week. The AI needs to analyze the Idea Generator dataset to identify the 5 strongest idea inputs—examples of high-quality thinking with specific customers, clear problems, strong founder advantages, and realistic market alignment.</p>';
+  
+  return `
+    <section class="section">
+      <h2><span>🏆</span> TOP INPUTS</h2>
+      <div class="note-card">
+        ${summary || fallback}
+      </div>
+    </section>
+  `;
+}
+
+function buildSuccessSignalsSection(text, ideaGeneratorData = []) {
+  // Format as bullet points (4-7 bullets expected)
+  const summary = text ? formatBulletPoints(text) : '';
+  const fallback = summary
+    ? ''
+    : '<p>No success signals identified this week. The AI needs to analyze the Idea Generator dataset to identify emerging patterns that correlate with higher-quality thinking and better idea formation—clarity trends, shifts in customer descriptions, increases in domain-driven ideas, and measurable readiness signals.</p>';
+  
+  return `
+    <section class="section">
+      <h2><span>📈</span> SUCCESS SIGNALS</h2>
+      <div class="note-card">
+        ${summary || fallback}
+      </div>
+    </section>
+  `;
+}
+
 function buildHighConfidenceSection(text, data = {}) {
   const summary = text ? formatParagraphs(text) : '';
   const funding = Array.isArray(data.funding) ? data.funding : [];
@@ -1541,11 +1678,11 @@ function buildMondayPreviewSection(text, trends = []) {
 function getSectionOrderForWeekday(weekday = '') {
   const day = weekday.toLowerCase();
   const orders = {
-    monday: ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'founder_blind_spots', 'one_thing_today'],
+    monday: ['idea_futures', 'validation', 'weekend_spikes', 'weekly_watchlist', 'clustering', 'trends', 'founder_blind_spots', 'success_signals', 'one_thing_today'],
     tuesday: ['idea_futures', 'validation', 'clustering', 'problem_heatmap', 'opportunities_in_gaps', 'early_market_signals', 'deal_radar', 'founder_blind_spots', 'one_thing_today'],
-    wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'founder_blind_spots', 'tomorrows_question', 'one_thing_today'],
+    wednesday: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'wednesday_experiment', 'founder_field_note', 'founder_blind_spots', 'founder_wins', 'top_inputs', 'success_signals', 'tomorrows_question', 'one_thing_today'],
     thursday: ['idea_futures', 'validation', 'why_ideas_fail', 'execution_gaps', 'monthly_progress', 'anti_hype_section', 'category_teardown', 'founder_blind_spots', 'one_thing_today', 'tomorrows_question'],
-    friday: ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'founder_blind_spots', 'weekend_challenge', 'monday_preview'],
+    friday: ['idea_futures', 'validation', 'weekly_top_10_ideas', 'cluster_of_the_week', 'founder_of_the_week', 'deal_radar', 'high_confidence_opportunities', 'founder_blind_spots', 'founder_wins', 'top_inputs', 'weekend_challenge', 'monday_preview'],
     default: ['idea_futures', 'clustering', 'validation', 'deal_radar', 'founder_blind_spots', 'one_thing_today']
   };
   return orders[day] || orders.default;
@@ -1582,6 +1719,9 @@ function getAllSectionsMasterOrder() {
     'weekend_challenge',
     'monday_preview',
     'founder_blind_spots',
+    'founder_wins',
+    'top_inputs',
+    'success_signals',
     'one_thing_today'
   ];
 }
@@ -1719,6 +1859,21 @@ const sectionMetadata = {
     icon: '💡',
     title: 'FOUNDER BLIND SPOTS',
     requiredData: 'founder idea feedback (postback advice dataset) from tool_advise_250516.txt'
+  },
+  founder_wins: {
+    icon: '✅',
+    title: 'FOUNDER WINS',
+    requiredData: 'Idea Generator input dataset (gen-idea-log.txt)'
+  },
+  top_inputs: {
+    icon: '🏆',
+    title: 'TOP INPUTS',
+    requiredData: 'Idea Generator input dataset (gen-idea-log.txt)'
+  },
+  success_signals: {
+    icon: '📈',
+    title: 'SUCCESS SIGNALS',
+    requiredData: 'Idea Generator input dataset (gen-idea-log.txt)'
   }
 };
 
@@ -1797,6 +1952,10 @@ function checkSectionHasDataStructure(sectionId, summaryBlocks, rawData, interna
       return !!(internalData.categories && internalData.categories.length > 0);
     case 'founder_blind_spots':
       return !!(internalData.adviceData && internalData.adviceData.length > 0);
+    case 'founder_wins':
+    case 'top_inputs':
+    case 'success_signals':
+      return !!(rawData.internal?.ideaGeneratorData && rawData.internal.ideaGeneratorData.length > 0);
     default:
       return false;
   }
@@ -1938,6 +2097,23 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
   const founderBlindSpotsSummary = summaryBlocks.founder_blind_spots ? await translateBlock(summaryBlocks.founder_blind_spots) : '';
   const founderBlindSpotsSection = (summaryBlocks.founder_blind_spots || (includeAllSections && adviceData.length > 0))
     ? await buildFounderBlindSpotsSection(founderBlindSpotsSummary, adviceData)
+    : '';
+  
+  // New positive sections (founder_wins, top_inputs, success_signals)
+  const ideaGeneratorData = rawData.internal?.ideaGeneratorData || [];
+  const founderWinsSummary = summaryBlocks.founder_wins ? await translateBlock(summaryBlocks.founder_wins) : '';
+  const founderWinsSection = (summaryBlocks.founder_wins || (includeAllSections && ideaGeneratorData.length > 0))
+    ? buildFounderWinsSection(founderWinsSummary, ideaGeneratorData)
+    : '';
+  
+  const topInputsSummary = summaryBlocks.top_inputs ? await translateBlock(summaryBlocks.top_inputs) : '';
+  const topInputsSection = (summaryBlocks.top_inputs || (includeAllSections && ideaGeneratorData.length > 0))
+    ? buildTopInputsSection(topInputsSummary, ideaGeneratorData)
+    : '';
+  
+  const successSignalsSummary = summaryBlocks.success_signals ? await translateBlock(summaryBlocks.success_signals) : '';
+  const successSignalsSection = (summaryBlocks.success_signals || (includeAllSections && ideaGeneratorData.length > 0))
+    ? buildSuccessSignalsSection(successSignalsSummary, ideaGeneratorData)
     : '';
   
   // Monday-specific sections
@@ -2083,7 +2259,10 @@ async function fillTemplate(template, insights, targetDate = null, includeAllSec
     weekend_challenge: weekendChallengeSection,
     monday_preview: mondayPreviewSection,
     one_thing_today: oneThingSection,
-    founder_blind_spots: founderBlindSpotsSection
+    founder_blind_spots: founderBlindSpotsSection,
+    founder_wins: founderWinsSection,
+    top_inputs: topInputsSection,
+    success_signals: successSignalsSection
   };
 
   // Determine section order based on mode

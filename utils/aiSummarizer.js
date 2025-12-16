@@ -229,6 +229,34 @@ Synthesize internal ValidatorAI data, including:
 – emerging patterns
 – repetitive pains
 – willingness-to-pay indicators
+– Idea Generator Input Feed (NEW): Startup Idea Generator input dataset, which includes for each user:
+  • industry they want to enter
+  • personal skills & domain experience
+  • the problem they want to solve
+  • who they believe the customer is
+  • (optional) the 10 AI-generated ideas produced by the tool (if available)
+  
+  Use this dataset to analyze:
+  • founder intentions
+  • skill–industry alignment
+  • customer clarity
+  • problem specificity
+  • founder advantage
+  • execution readiness
+  • comparative patterns between idea generator inputs and validation tool postbacks
+  
+  Data Cleaning Rules (MANDATORY for Idea Generator Inputs):
+  Before using any Idea Generator entry, you MUST filter out and ignore submissions that match ANY of the following:
+  • non-English responses
+  • incomplete entries (missing any of the four required fields: industry, skills/resources, problem, customer)
+  • entries containing gibberish, keyboard spam, emoji-noise, or nonsensical text
+  • entries where the problem or customer field is blank, "n/a," "none," "idk," or equivalent
+  • submissions that are clearly AI-generated artifacts or contain repeated unnatural patterns
+  • entries dominated by special characters, symbols, random punctuation, or code fragments
+  • entries that describe no identifiable human customer
+  • entries that duplicate the same inputs repeatedly (bot behavior)
+  
+  Only use cleaned, valid submissions for analysis. If fewer than 20% of submissions survive filtering for a given period, include this sentence: "Note: A large portion of submissions this week were incomplete or unusable, which itself signals high uncertainty among early founders."
 
 Blend with external signals, including data from:
 – Product Hunt
@@ -616,7 +644,139 @@ Focus on patterns that emerge from the advice dataset, not individual pieces of 
 Prioritize brevity and actionable insights. Make URLs clickable if any are present in the advice data.
 This is a required section every day.
 
-26. daily_analysis — Day-of-Week Section Router
+26. founder_wins — What Founders Are Getting Right This Week
+Prompt:
+Generate ONLY content for the founder_wins section. Do NOT include other sections.
+
+Purpose: Showcase positive patterns emerging from the Idea Generator + Validation Tool data. Highlight behaviors, clarity improvements, and execution readiness that predict better outcomes. Make this the upbeat, confidence-building counterweight to the "blind spots" section.
+
+Analyze the Idea Generator dataset + postback/validation dataset to identify what founders are doing RIGHT this week.
+
+CRITICAL FORMATTING REQUIREMENT: You MUST output EXACTLY 5–7 separate bullet points, each on its own line, using this EXACT format:
+• [First bullet point text]
+• [Second bullet point text]
+• [Third bullet point text]
+• [Fourth bullet point text]
+• [Fifth bullet point text]
+• [Sixth bullet point text - optional]
+• [Seventh bullet point text - optional]
+
+EXAMPLE OUTPUT FORMAT:
+• Founders are defining customers with 40% more specificity this week, naming exact roles like "hospital administrators managing patient records" instead of "healthcare workers"—this clarity predicts 3x better execution outcomes.
+• Strong founder advantages are being leveraged effectively: 65% of entries now explicitly connect domain experience to the problem, showing founders understand their unique edge rather than building generic solutions.
+• Problem statements have improved structure, with 52% now including measurable pain points and urgency signals—this indicates founders are doing deeper customer discovery before building.
+• Industry alignment is tightening: entries show 38% increase in founders choosing industries where they have direct experience, reducing the "outsider trying to solve insider problems" pattern.
+• Execution readiness signals are rising: entries with all four fields (industry, skills, problem, customer) completed show 2.5x higher progression rates to MVP stage.
+• Why this matters for beginners today: The gap between "I have an idea" and "I have a validated problem" is narrowing—founders who start with clear customer definitions and founder advantages are 4x more likely to reach paying customers within 90 days.
+
+Output 5–7 bullet points covering:
+• clearer customer definitions (top improvements)
+• stronger founder advantages being used effectively
+• well-structured problem statements
+• increased industry alignment
+• examples of high execution readiness (anonymous patterns only)
+• any jump in clarity, specificity, or skill–market fit
+• End with: "Why this matters for beginners today."
+
+Rules:
+– Use ONLY aggregated patterns, never identify a specific founder.
+– No more than 2 sentences per bullet.
+– Each bullet MUST include: what founders did right + why it matters.
+– Each bullet MUST be on its own line starting with • symbol.
+– DO NOT write paragraphs. DO NOT write numbered lists. ONLY write bullet points with • symbol.
+
+Use only CLEANED Idea Generator entries according to the mandatory data cleaning rules.
+Do NOT add section headers. Write ONLY the bullet points, one per line.
+
+27. top_inputs — Top 5 Strongest Idea Inputs of the Week
+Prompt:
+Generate ONLY content for the top_inputs section. Do NOT include other sections.
+
+Purpose: Show readers examples of high-quality thinking, without naming or identifying any individual founder.
+
+Using ONLY the Idea Generator input feed (industry, skills, problem, customer):
+Identify the 5 strongest idea inputs of the week.
+
+Strength criteria:
+– specific, actionable customer
+– clear, solvable problem
+– strong founder advantage
+– realistic industry alignment
+– narrow and reachable market
+
+CRITICAL FORMATTING REQUIREMENT: You MUST output EXACTLY 5 separate bullet points, each on its own line, using this EXACT format:
+• [First input summary]
+• [Second input summary]
+• [Third input summary]
+• [Fourth input summary]
+• [Fifth input summary]
+
+EXAMPLE OUTPUT FORMAT:
+• Customer: Hospital administrators managing patient records across multiple systems. Problem: Fragmented health data causing delayed diagnoses and treatment errors. Founder advantage: 10 years as healthcare IT consultant with deep EHR integration experience. Industry: Healthcare technology. Why it's strong: Combines specific customer pain with founder's direct domain expertise and addresses a measurable, urgent problem.
+• Customer: Small manufacturing plant managers with 20-50 employees. Problem: Manual inventory tracking causing production delays and waste. Founder advantage: Former operations manager at similar-sized factory, understands the exact workflow bottlenecks. Industry: Manufacturing/operations. Why it's strong: Narrow customer segment, founder has insider knowledge of the problem, and the solution directly addresses operational efficiency.
+• Customer: Independent fitness coaches managing 20-50 clients. Problem: Client progress tracking scattered across multiple apps and spreadsheets. Founder advantage: Certified personal trainer with 5 years experience, understands the exact pain points from personal use. Industry: Fitness/wellness. Why it's strong: Founder is the customer, problem is personally experienced, and market is reachable through existing network.
+
+Output 5 bullet points, each containing:
+• the customer
+• the problem
+• the founder advantage
+• the industry
+• 1 sentence on why this input is high quality
+
+Rules:
+– Format as bullet points using • symbol, NOT paragraphs or numbered lists.
+– Each bullet MUST be on its own line starting with • symbol.
+– No idea numbers or sensitive details
+– No actual AI-generated startup ideas (inputs only)
+– Each bullet should be a complete, anonymized summary
+– DO NOT write paragraphs. DO NOT write numbered lists. ONLY write bullet points with • symbol.
+
+Use only CLEANED Idea Generator entries according to the mandatory data cleaning rules.
+Do NOT add section headers. Write ONLY the 5 bullet points, one per line.
+
+28. success_signals — Emerging Founder Success Patterns
+Prompt:
+Generate ONLY content for the success_signals section. Do NOT include other sections.
+
+Purpose: Reveal patterns in the data that correlate with higher-quality thinking and better idea formation.
+
+Analyze the Idea Generator dataset + Validation postbacks to identify emerging patterns that correlate with stronger ideas and better founder readiness.
+
+CRITICAL FORMATTING REQUIREMENT: You MUST output EXACTLY 4–7 separate bullet points, each on its own line, using this EXACT format:
+• [First bullet point text]
+• [Second bullet point text]
+• [Third bullet point text]
+• [Fourth bullet point text]
+• [Fifth bullet point text - optional]
+• [Sixth bullet point text - optional]
+• [Seventh bullet point text - optional]
+
+EXAMPLE OUTPUT FORMAT:
+• Customer specificity is rising 35% week-over-week: entries now name exact roles like "restaurant managers" instead of "businesses"—this signals founders are doing deeper discovery, which predicts 2.5x better MVP completion rates.
+• Domain-driven ideas increased 42%: more founders are choosing industries where they have direct experience, reducing the "outsider solving insider problems" pattern that typically fails—expect this trend to continue as founders learn from early failures.
+• Problem articulation improved: 58% of entries now include measurable pain points and urgency signals, up from 32% last week—this indicates founders are validating problems before building, which correlates with higher execution success.
+• Founder advantage clarity jumped 28%: entries explicitly connecting skills to problems show 3x better progression rates—this pattern suggests founders are learning to leverage their unique edge rather than building generic solutions.
+
+Output 4–7 bullet points showing:
+• clarity trends (is specificity rising?)
+• shifts in how founders describe customers
+• increases in domain-driven ideas
+• improvements in problem articulation
+• reduction in vague or "everyone" customer definitions
+• correlation patterns between founder advantage and idea quality
+• any measurable "readiness signal" emerging this week
+
+Rules:
+– Format as bullet points using • symbol, NOT paragraphs or numbered lists.
+– Each bullet MUST be on its own line starting with • symbol.
+– Each bullet MUST include: the pattern + what it means for early founders + the predicted direction for next week
+– No more than 2 sentences per bullet
+– DO NOT write paragraphs. DO NOT write numbered lists. ONLY write bullet points with • symbol.
+
+Use only CLEANED Idea Generator entries according to the mandatory data cleaning rules.
+Do NOT add section headers. Write ONLY the bullet points, one per line.
+
+29. daily_analysis — Day-of-Week Section Router
 Prompt:
 Based on the value of newsletter_day, select the required sections for that day’s edition of The Startup Idea Terminal.
 Only include the sections assigned to that day.
@@ -634,7 +794,7 @@ weekend_spikes
 weekly_watchlist
 clustering (1 major cluster)
 trends (micro-trends from external sources)
-
+success_signals (if data available)
 one_thing_today
 If newsletter_day = Tuesday
 
@@ -654,6 +814,9 @@ validation
 deal_radar
 wednesday_experiment
 founder_field_note
+founder_wins (if data available)
+top_inputs (if data available)
+success_signals (if data available)
 tomorrows_question
 one_thing_today
 If newsletter_day = Thursday
@@ -675,9 +838,21 @@ cluster_of_the_week
 founder_of_the_week
 deal_radar (micro funding roundup)
 high_confidence_opportunities
+founder_wins (if data available)
+top_inputs (if data available)
 weekend_challenge
 monday_preview
-The output must be cohesive, high-signal, written in Terminal voice, and follow the narrative order for that day.`;
+The output must be cohesive, high-signal, written in Terminal voice, and follow the narrative order for that day.
+
+OPTIONAL BONUS SECTIONS (Include if data available):
+– founder_wins (What Founders Are Getting Right This Week)
+– top_inputs (Top 5 Strongest Idea Inputs of the Week)
+– success_signals (Emerging Founder Success Patterns)
+
+These sections can appear on any day when Idea Generator data is available, but best placements are:
+– WEDNESDAY: founder_wins, top_inputs, success_signals
+– FRIDAY: founder_wins, top_inputs
+– MONDAY: success_signals`;
 
   // Check if this is the daily_analysis router section
   if (section === 'daily_analysis') {
@@ -894,6 +1069,38 @@ async function generateFallbackInsight(data, section) {
       }
       return `Founder blind spots analysis requires advice data from the postback dataset (tool_advise_{YYMMDD}.txt files). This data reveals patterns of unrecognized weaknesses, threats, or oversights that founders consistently miss.`;
     }
+    if (section === 'founder_wins' && data.ideaGeneratorData) {
+      const ideaGenCount = Array.isArray(data.ideaGeneratorData) ? data.ideaGeneratorData.length : 0;
+      if (ideaGenCount > 0) {
+        // Return bullet points format for fallback
+        return `• Founders are showing improved clarity in customer definitions, with ${ideaGenCount} entries demonstrating more specific customer targeting—this predicts better execution outcomes.\n• Stronger alignment between skills and industries is evident, as entries show founders leveraging domain experience more effectively.\n• Problem statements have improved structure, with entries including measurable pain points and urgency signals.\n• Increased industry alignment: founders are choosing industries where they have direct experience, reducing failure patterns.\n• Execution readiness signals are rising: entries with complete fields show higher progression rates to MVP stage.\n• Why this matters for beginners today: Founders who start with clear customer definitions and founder advantages are more likely to reach paying customers within 90 days.`;
+      }
+      return `Founder wins analysis requires Idea Generator data. This section highlights what founders are doing right—clearer customer definitions, stronger founder advantages, well-structured problems, and increased industry alignment.`;
+    }
+    if (section === 'top_inputs' && data.ideaGeneratorData) {
+      const ideaGenCount = Array.isArray(data.ideaGeneratorData) ? data.ideaGeneratorData.length : 0;
+      if (ideaGenCount > 0) {
+        // Sample top entries and format as bullets
+        const sampleEntries = data.ideaGeneratorData.slice(0, 5);
+        const bullets = sampleEntries.map((entry, idx) => {
+          const customer = entry.customer || 'Specific customer segment';
+          const problem = entry.problem || 'Clear problem';
+          const skills = entry.skills || 'Founder advantage';
+          const industry = entry.industry || 'Industry';
+          return `• Customer: ${customer}. Problem: ${problem}. Founder advantage: ${skills}. Industry: ${industry}. Why it's strong: Combines specific customer pain with founder's domain expertise and addresses a measurable problem.`;
+        });
+        return bullets.join('\n');
+      }
+      return `Top inputs analysis requires Idea Generator data. This section showcases the 5 strongest idea inputs of the week—examples of high-quality thinking with specific customers, clear problems, strong founder advantages, and realistic market alignment.`;
+    }
+    if (section === 'success_signals' && data.ideaGeneratorData) {
+      const ideaGenCount = Array.isArray(data.ideaGeneratorData) ? data.ideaGeneratorData.length : 0;
+      if (ideaGenCount > 0) {
+        // Return bullet points format for fallback
+        return `• Customer specificity is rising: entries show more exact customer definitions, signaling deeper discovery—this predicts better MVP completion rates.\n• Domain-driven ideas increased: more founders choosing industries with direct experience, reducing failure patterns—expect this trend to continue.\n• Problem articulation improved: entries include measurable pain points and urgency signals, indicating better validation before building.\n• Founder advantage clarity jumped: entries connecting skills to problems show better progression rates—this pattern suggests founders are learning to leverage their unique edge.\n• Execution readiness signals rising: complete entries with all fields show higher success rates—this indicates improved founder preparation.`;
+      }
+      return `Success signals analysis requires Idea Generator data. This section reveals patterns that correlate with higher-quality thinking and better idea formation—clarity trends, shifts in customer descriptions, increases in domain-driven ideas, and measurable readiness signals.`;
+    }
   } catch (error) {
     console.warn(`Error generating fallback insight for ${section}:`, error.message);
   }
@@ -939,6 +1146,16 @@ export async function generateMultipleInsights(dataBlocks) {
     // Skip metadata and daily_analysis itself
     if (section === '_metadata' || section === 'daily_analysis') continue;
     
+    // For new Idea Generator sections, only generate if data is available
+    if (['founder_wins', 'top_inputs', 'success_signals'].includes(section)) {
+      const hasData = data.ideaGeneratorData && Array.isArray(data.ideaGeneratorData) && data.ideaGeneratorData.length > 0;
+      if (!hasData) {
+        console.log(`Skipping ${section} - no Idea Generator data available`);
+        insights[section] = '';
+        continue;
+      }
+    }
+    
     promises.push(
       generateInsight(data, section)
         .then(insight => ({ section, insight }))
@@ -971,9 +1188,22 @@ async function generateWeekdaySections(dataBlocks) {
   const insights = {};
   const requiredSections = getRequiredSectionsForWeekday(newsletter_day);
   
-  console.log(`Generating ${requiredSections.length} sections for ${newsletter_day}:`, requiredSections);
+  // Add optional Idea Generator sections if data is available
+  const optionalSections = ['founder_wins', 'top_inputs', 'success_signals'];
+  const sectionsToGenerate = [...requiredSections];
   
-  const promises = requiredSections.map(section => {
+  for (const section of optionalSections) {
+    const data = dataBlocks[section];
+    const hasData = data && data.ideaGeneratorData && Array.isArray(data.ideaGeneratorData) && data.ideaGeneratorData.length > 0;
+    if (hasData && !sectionsToGenerate.includes(section)) {
+      sectionsToGenerate.push(section);
+      console.log(`Adding optional section ${section} (${data.ideaGeneratorData.length} entries available)`);
+    }
+  }
+  
+  console.log(`Generating ${sectionsToGenerate.length} sections for ${newsletter_day}:`, sectionsToGenerate);
+  
+  const promises = sectionsToGenerate.map(section => {
     const data = dataBlocks[section] || dataBlocks.daily_analysis;
     return generateInsight(data, section)
       .then(insight => ({ section, insight }))

@@ -10,6 +10,7 @@ import config from '../config.js';
 import { getDateString } from '../utils/dateUtils.js';
 import { generateMultipleInsights, translateToEnglish } from '../utils/aiSummarizer.js';
 import { loadAndMerge } from './mergeData.js';
+import { fetchIdeaGeneratorData } from '../utils/logParser.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -217,6 +218,32 @@ async function prepareDataBlocks(mergedData, targetDate) {
     summary: `Founder idea feedback (postback advice dataset) with ${allAdviceData.length} total advice entries (analyzing ${sampledAdviceData.length} sample entries for patterns)`
   };
   
+  // Fetch Idea Generator data for new sections
+  const ideaGeneratorData = await fetchIdeaGeneratorData(7);
+  
+  // Founder Wins - What Founders Are Getting Right This Week
+  blocks.founder_wins = {
+    ideaGeneratorData: ideaGeneratorData,
+    adviceData: sampledAdviceData,
+    validation: mergedData.internal.validation || {},
+    summary: `Idea Generator dataset with ${ideaGeneratorData.length} cleaned entries + postback advice dataset for pattern analysis`
+  };
+  
+  // Top Inputs - Top 5 Strongest Idea Inputs of the Week
+  blocks.top_inputs = {
+    ideaGeneratorData: ideaGeneratorData,
+    summary: `Idea Generator dataset with ${ideaGeneratorData.length} cleaned entries`
+  };
+  
+  // Success Signals - Emerging Founder Success Patterns
+  blocks.success_signals = {
+    ideaGeneratorData: ideaGeneratorData,
+    adviceData: sampledAdviceData,
+    validation: mergedData.internal.validation || {},
+    categories: mergedData.internal.categories || [],
+    summary: `Idea Generator dataset with ${ideaGeneratorData.length} cleaned entries + validation data for pattern correlation`
+  };
+  
   // Weekly Top 10 Ideas (Friday only)
   blocks.weekly_top_10_ideas = {
     ideas: mergedData.internal.weeklyTopIdeas || [],
@@ -311,7 +338,11 @@ export async function generateInsights(date = null) {
         weekend_challenge: insights.weekend_challenge || '',
         monday_preview: insights.monday_preview || '',
         // Every day section
-        founder_blind_spots: insights.founder_blind_spots || ''
+        founder_blind_spots: insights.founder_blind_spots || '',
+        // New positive sections (founder_wins, top_inputs, success_signals)
+        founder_wins: insights.founder_wins || '',
+        top_inputs: insights.top_inputs || '',
+        success_signals: insights.success_signals || ''
       },
            raw_data: {
              internal: {
@@ -325,6 +356,7 @@ export async function generateInsights(date = null) {
               weeklyTopIdeas: mergedData.internal.weeklyTopIdeas || [], // Latest 10 unique entries from tool_chart.txt
               topCategoryByScore: mergedData.internal.topCategoryByScore || null, // Top category by total score
               adviceData: mergedData.internal.adviceData || [], // Founder idea feedback (postback advice dataset)
+              ideaGeneratorData: dataBlocks.founder_wins?.ideaGeneratorData || [], // Idea Generator input dataset
               metadata: mergedData.internal.metadata
              },
         categories: mergedData.internal.categories,
